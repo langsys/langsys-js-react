@@ -1,0 +1,15 @@
+.DS_Store
+node_modules
+/dist
+/coverage
+.env
+.env.*
+!.env.example
+
+# Lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Generated
+CHANGELOG.md
