@@ -52,8 +52,10 @@ export { LangsysAppAPI } from 'langsys-js-typescript';
 export { createLocaleStore, useSignal } from './adapters.js';
 export { useCurrentLocale, useLocaleStore, useT, useTranslations } from './hooks.js';
 
-// Component
+// Components
 export { Translate, type TranslateProps } from './components/Translate.js';
+export { Phrase, type PhraseProps } from './components/Phrase.js';
+export { DontTranslate, type DontTranslateProps } from './components/DontTranslate.js';
 
 // Type re-exports — these are framework-agnostic, so consumers can rely on them
 // directly without reaching into `langsys-js-typescript`.

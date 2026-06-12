@@ -20,7 +20,7 @@ Integrate the Langsys Translation Manager into your React, Next.js, Remix, or Vi
 
 - A `LangsysApp` whose `init` accepts a `Signal<string>` (made with `createLocaleStore`) for the user locale
 - Hooks — `useT`, `useCurrentLocale`, `useTranslations`, `useLocaleStore` — that re-render components when translations or the loaded locale change
-- A `<Translate>` component wrapping the underlying DOM walker
+- Components — `<Translate>` (HTML content blocks), `<Phrase>` (markup-bearing phrases for pluralization), `<DontTranslate>` (never-translated regions)
 
 If you need the SDK outside React (a Node script, a non-React web app), import from `langsys-js-typescript` directly.
 
@@ -187,6 +187,38 @@ The component:
 ```
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `className?`, `children`.
+
+### `<Phrase>` — markup-bearing phrases (pluralization)
+
+Keeps a run that contains inline markup as **one** translatable phrase — so a count variable stays next to the noun it pluralizes, and the translator sees the whole sentence:
+
+```tsx
+import { Phrase } from 'langsys-js-react';
+
+<Phrase category="ProductCard" params={{ n: reviewCount }}>
+    Based on {'{n}'} <strong>reviews</strong>
+</Phrase>
+```
+
+The inline elements never reach the translator — they're replaced with neutral markup tokens (`{m0o}`…`{m0c}`) and the real framework-owned elements are reconstituted around the translated text at render. This is also what lets reordering languages move emphasis correctly (`<span>White</span> House` → `Casa <span>Blanca</span>`). Pass interpolation values via `params`; keep the markup children static.
+
+> Note: in JSX a literal `{n}` is an expression, so write it as `{'{n}'}` to emit the placeholder text.
+
+`<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `className?`, `children`.
+
+### `<DontTranslate>` — never-translated regions
+
+Marks content that must be preserved verbatim (brand names, domains, code):
+
+```tsx
+import { DontTranslate } from 'langsys-js-react';
+
+Built with <DontTranslate>Kangen®</DontTranslate> on <DontTranslate>langsys.dev</DontTranslate>
+```
+
+Renders the host with `translate="no"`, which the base SDK's tokenizer and renderer already honor — the content is never tokenized, registered, or replaced.
+
+`<DontTranslate>` props: `tag?` (defaults to `span`), `className?`, `children`.
 
 ## Hooks & reactive primitives
 
