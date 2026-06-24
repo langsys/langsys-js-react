@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-react",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "React binding for the Langsys translation SDK — realtime continuous translations with automatic token discovery, delivered as hooks and a <Translate> component.",
     "author": "Langsys",
     "license": "MIT",
@@ -61,7 +61,7 @@
         "react": "^18.0.0 || ^19.0.0"
     },
     "dependencies": {
-        "langsys-js-typescript": "^0.2.0"
+        "langsys-js-typescript": "^0.2.2"
     },
     "devDependencies": {
         "@eslint/js": "^9.0.0",

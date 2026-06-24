@@ -12,15 +12,15 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; Node 22 ships npm 10.x.
+      # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; Node 24 ships npm 11.3.x.
       - run: npm install -g npm@latest
 
       - run: npm ci
