@@ -16,11 +16,11 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; Node 24 ships npm 11.3.x.
+      # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; Node 22 ships npm 10.x.
       - run: npm install -g npm@latest
 
       - run: npm ci
