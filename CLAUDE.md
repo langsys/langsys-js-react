@@ -83,16 +83,17 @@ TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 
 ## Local development setup
 
-This package depends on `langsys-js-typescript` via `file:../langsys-js-typescript`. After changes to the base SDK:
+This package consumes `langsys-js-typescript` as a **published npm dependency** — a semver range (`"langsys-js-typescript": "^x.y.z"`) in `package.json`, resolved from `registry.npmjs.org`. That committed form is canonical. **Never commit** a `file:../langsys-js-typescript` link, an `npm link`, or an `overrides`/`resolutions` redirect: a stale local build silently shadowing the real package has burned us before, and the committed lockfile must always pin the registry tarball (`resolved: https://registry.npmjs.org/…tgz`).
+
+To pick up base-SDK changes, publish the base SDK first, then bump the range here:
 
 ```bash
-cd ../langsys-js-typescript
-npm run build         # rebuilds dist/
-cd ../langsys-js-react
-npm run typecheck     # picks up new types
+# in ../langsys-js-typescript: cut a release (npm publish via its CI), then back here:
+npm install langsys-js-typescript@^x.y.z   # bumps the range AND re-pins the lockfile
+npm run typecheck                          # picks up the new types
 ```
 
-For end-user installs the dep would resolve to a real npm version — the `file:` form is for the monorepo workflow only. Switch it to a semver range (`"langsys-js-typescript": "^x.y.z"`) before publishing.
+If you must iterate against an *unpublished* base-SDK build, do it as a **temporary, uncommitted** local override (`npm link ../langsys-js-typescript`, or a throwaway `file:` install) and revert it before committing — never `git add` the resulting `package.json` / `package-lock.json` churn. Before publishing, the dep must be a semver range and the lockfile must resolve to `registry.npmjs.org`.
 
 ## Release & publishing
 
