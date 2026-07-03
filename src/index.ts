@@ -45,6 +45,11 @@ import {
 // components, prefer the hooks (`useT`, `useCurrentLocale`, …).
 export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from 'langsys-js-typescript';
 
+// Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
+// (v0.3.0+); re-exported so consumers can normalize their own values the same
+// way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
+export { canonicalizeLocale } from 'langsys-js-typescript';
+
 // API client (vanilla — no React concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 

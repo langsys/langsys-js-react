@@ -5,14 +5,14 @@ import type { CSSProperties } from 'react';
 import { LangsysApp, Translate, useCurrentLocale, useLocaleStore, useT } from '../src/index';
 
 const LOCALES = [
-    { code: 'en-us', label: 'English (US)' },
-    { code: 'es-es', label: 'Español' },
-    { code: 'fr-fr', label: 'Français' },
-    { code: 'de-de', label: 'Deutsch' },
+    { code: 'en-US', label: 'English (US)' },
+    { code: 'es-ES', label: 'Español' },
+    { code: 'fr-FR', label: 'Français' },
+    { code: 'de-DE', label: 'Deutsch' },
 ];
 
 export function App() {
-    const [locale, setLocale, localeStore] = useLocaleStore('en-us');
+    const [locale, setLocale, localeStore] = useLocaleStore('en-US');
     const [ready, setReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +27,7 @@ export function App() {
             projectid,
             key,
             UserLocaleStore: localeStore,
-            baseLocale: 'en-us',
+            baseLocale: 'en-US',
             debug: true,
         }).then((res) => {
             if (res?.status === false) setError(res.errors?.join(', ') ?? 'Init failed');

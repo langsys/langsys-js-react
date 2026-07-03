@@ -57,6 +57,7 @@ useSignal(signal)       -> T               // low-level Signal → value bridge
 createLocaleStore(initial?)  // Signal<string> — the writable analog
 t, currentlyLoadedLocale, sTranslations  // raw Signals; prefer the hooks in components
 createSignal                 // re-exported generic Signal factory
+canonicalizeLocale(locale)   // re-exported BCP 47 normalizer ('en-us' → 'en-US'); the SDK canonicalizes all locale input since base 0.3.0
 
 // Component
 <Translate category? custom_id? label? tag? className? children />

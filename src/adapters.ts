@@ -28,13 +28,18 @@ export function useSignal<T>(signal: Signal<T>): T {
 
 /**
  * Create a reactive `Signal<string>` to hold the user's selected locale — the
- * React analog of Svelte's `writable('en-us')`.
+ * React analog of Svelte's `writable('en-US')`.
  *
  * Pass the result as `UserLocaleStore` to `LangsysApp.init`, read it reactively
  * with `useSignal(store)` (or use the all-in-one `useLocaleStore` hook), and
- * switch locale with `store.set('fr-fr')`. The base SDK only ever reads and
+ * switch locale with `store.set('fr-FR')`. The base SDK only ever reads and
  * subscribes to it — it never writes.
+ *
+ * Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+), so
+ * `'en-us'` still works on input — but `currentlyLoadedLocale` always emits the
+ * canonical form (`'en-US'`), so prefer canonical casing to keep comparisons
+ * against it straightforward.
  */
-export function createLocaleStore(initial = 'en-us'): Signal<string> {
+export function createLocaleStore(initial = 'en-US'): Signal<string> {
     return createSignal<string>(initial);
 }

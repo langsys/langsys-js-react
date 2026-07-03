@@ -9,24 +9,31 @@ import { createLocaleStore } from './adapters.js';
  */
 describe('createLocaleStore', () => {
     it('seeds, reads, updates, and notifies subscribers', () => {
-        const store = createLocaleStore('en-us');
-        expect(store.get()).toBe('en-us');
+        const store = createLocaleStore('en-US');
+        expect(store.get()).toBe('en-US');
 
         const seen: string[] = [];
         const unsub = store.subscribe((v) => seen.push(v));
-        expect(seen).toEqual(['en-us']); // subscribe fires immediately with the current value
+        expect(seen).toEqual(['en-US']); // subscribe fires immediately with the current value
 
-        store.set('fr-fr');
-        expect(store.get()).toBe('fr-fr');
-        expect(seen).toEqual(['en-us', 'fr-fr']);
+        store.set('fr-FR');
+        expect(store.get()).toBe('fr-FR');
+        expect(seen).toEqual(['en-US', 'fr-FR']);
 
         unsub();
-        store.set('de-de');
-        expect(store.get()).toBe('de-de');
-        expect(seen).toEqual(['en-us', 'fr-fr']); // no notifications after unsubscribe
+        store.set('de-DE');
+        expect(store.get()).toBe('de-DE');
+        expect(seen).toEqual(['en-US', 'fr-FR']); // no notifications after unsubscribe
     });
 
-    it('defaults to en-us', () => {
-        expect(createLocaleStore().get()).toBe('en-us');
+    it('defaults to en-US', () => {
+        expect(createLocaleStore().get()).toBe('en-US');
+    });
+
+    it('passes values through verbatim — canonicalization is the base SDK\'s job', () => {
+        // The store is a plain Signal; lowercase input is legal and reaches the
+        // SDK as-is, where v0.3.0+ canonicalizes it to BCP 47 ('en-us' → 'en-US').
+        const store = createLocaleStore('en-us');
+        expect(store.get()).toBe('en-us');
     });
 });

@@ -41,7 +41,7 @@ export function useTranslations(): iCategories {
  * `Signal<string>` (the React analog of Svelte's `writable`), subscribes the
  * component to it, and returns `[locale, setLocale, store]`.
  *
- *   const [locale, setLocale, store] = useLocaleStore('en-us');
+ *   const [locale, setLocale, store] = useLocaleStore('en-US');
  *   useEffect(() => {
  *     LangsysApp.init({ projectid, key, UserLocaleStore: store });
  *   }, [store]);
@@ -51,7 +51,7 @@ export function useTranslations(): iCategories {
  * The store is created lazily once and never re-created across renders, so it is
  * safe to pass to `LangsysApp.init` and to depend on in effects.
  */
-export function useLocaleStore(initial = 'en-us'): [string, (locale: string) => void, Signal<string>] {
+export function useLocaleStore(initial = 'en-US'): [string, (locale: string) => void, Signal<string>] {
     const [store] = useState(() => createLocaleStore(initial));
     const locale = useSignal(store);
     return [locale, store.set, store];

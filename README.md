@@ -53,7 +53,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { LangsysApp, useLocaleStore } from 'langsys-js-react';
 
 export function LangsysGate({ children }: { children: ReactNode }) {
-    const [, , localeStore] = useLocaleStore('en-us');
+    const [, , localeStore] = useLocaleStore('en-US');
     const [ready, setReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export function LangsysGate({ children }: { children: ReactNode }) {
             projectid: import.meta.env.VITE_LANGSYS_PROJECT_ID,
             key: import.meta.env.VITE_LANGSYS_API_KEY,
             UserLocaleStore: localeStore,
-            baseLocale: 'en-us',
+            baseLocale: 'en-US',
             debug: false,
             ssrTokenStrategy: 'client',
         }).then((res) => {
@@ -77,7 +77,9 @@ export function LangsysGate({ children }: { children: ReactNode }) {
 }
 ```
 
-`UserLocaleStore` is a `Signal<string>` — switch it with `setLocale(...)` (from the same `useLocaleStore` call) or `localeStore.set('fr-fr')`, and the SDK reacts. If you'd rather keep the locale store at module scope, `const localeStore = createLocaleStore('en-us')` works too.
+`UserLocaleStore` is a `Signal<string>` — switch it with `setLocale(...)` (from the same `useLocaleStore` call) or `localeStore.set('fr-FR')`, and the SDK reacts. If you'd rather keep the locale store at module scope, `const localeStore = createLocaleStore('en-US')` works too.
+
+Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+): lowercase input like `'en-us'` still works, but `useCurrentLocale()` and `detectPreferredLocale()` always return the canonical form (`'en-US'`) — compare against that, or normalize your own values with the re-exported `canonicalizeLocale()`.
 
 ### SSR token strategy
 
@@ -136,9 +138,9 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. Dates serialize to ISO 8601.
+Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
 
-> Future versions will swap the simple `{name}` runtime for ICU MessageFormat — adding plural / select / date formatting — without changing the public signature. Today's `t('{count} items', 'Cart', { count })` will evolve to `t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
+> Future versions will swap the simple `{name}` runtime for full ICU MessageFormat — adding plural / select — without changing the public signature. Style-less ICU arguments (`{n, number}`, `{d, date}`, `{t, time}`) already format as of base SDK 0.3.0. Today's `t('{count} items', 'Cart', { count })` will evolve to `t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
 
 #### Categorization disambiguates context
 
@@ -231,6 +233,7 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 | `useSignal(signal)` | `<T>(s: Signal<T>) => T` | Low-level: subscribe a component to any base-SDK signal. |
 | `createLocaleStore(initial?)` | `(s?: string) => Signal<string>` | Make a user-locale store outside React (module scope). |
 | `t` / `currentlyLoadedLocale` / `sTranslations` | `Signal<…>` | Raw signals for direct subscription outside React. In components, prefer the hooks. |
+| `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to canonical BCP 47 (`'en-us'` → `'en-US'`) — the same normalization the SDK applies internally. |
 
 ## Server-Side Rendering (Next.js, Remix)
 
@@ -249,7 +252,7 @@ const countries: iCountryList   = await LangsysApp.getCountries();     // [{ cod
 const dialCodes                 = await LangsysApp.getDialCodes();     // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
 const currencies: iCurrencyList = await LangsysApp.getCurrencies();    // [{ code: "USD", name: "US Dollar", symbol: "$", ... }, ...]
 const locales: iLocaleDefault   = await LangsysApp.getLocales();       // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
-const localeName                = await LangsysApp.getLocaleNameWithLookup('es-es', true, 'fr-fr'); // "espagnol"
+const localeName                = await LangsysApp.getLocaleNameWithLookup('es-ES', true, 'fr-FR'); // "espagnol"
 ```
 
 ### Detecting the user's preferred locale
@@ -267,7 +270,7 @@ const supportedLocales = (await LangsysApp.getLocalesFlat()).map((l) => l.code);
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'), supportedLocales);
 ```
 
-The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), then returns `false` if no match.
+The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and is script-aware via CLDR likely-subtags (base SDK 0.3.0+): `zh-TW` matches `zh-Hant` and never falls back to `zh-Hans`. Results are always canonical BCP 47; it returns `false` if no match.
 
 ### Waiting for translations to load
 
