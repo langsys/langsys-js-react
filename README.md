@@ -196,6 +196,8 @@ The component:
 </Translate>
 ```
 
+> **Write the placeholder as `{'{count}'}`, not bare `{count}`.** In JSX a literal `{count}` is a JavaScript expression — React evaluates and substitutes it *before* the SDK's DOM walker ever sees the text, so the braces are gone: the phrase registers pre-substituted (re-registering on every value change) and `params` has nothing to interpolate. It looks fine in the base locale, which hides the breakage. The string-literal form `{'{count}'}` emits real `{count}` text into the DOM for the SDK to interpolate. Same rule as `<Phrase>` above. (Passing values through `params` — not into the markup — is always safe.)
+
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
 ### `<Phrase>` — markup-bearing phrases (pluralization)
