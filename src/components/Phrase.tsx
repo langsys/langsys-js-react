@@ -9,7 +9,7 @@ import { Phrase as VanillaPhrase } from 'langsys-js-typescript';
 export interface PhraseProps {
     /** Category the phrase registers under (disambiguation for translators). */
     category?: string;
-    /** Interpolation params — `{n}` for pluralization, `{name}`, etc. */
+    /** Interpolation params. Write placeholders as `%n%` / `%name%` in the markup (a bare `{n}` in JSX is an expression). */
     params?: Record<string, unknown>;
     /** Host element tag. Defaults to `<span>`. */
     tag?: string;
@@ -25,8 +25,12 @@ export interface PhraseProps {
  * count variable stays next to the noun it pluralizes:
  *
  *   <Phrase category="ProductCard" params={{ n: reviewCount }}>
- *     Based on {'{n}'} <strong>reviews</strong>
+ *     Based on %n% <strong>reviews</strong>
  *   </Phrase>
+ *
+ * Write placeholders as `%n%` (not bare `{n}`): in JSX a literal `{n}` is a JS
+ * expression React evaluates before the SDK sees the text. `%n%` passes through
+ * as literal text and the SDK normalizes it to canonical `{n}` at capture.
  *
  * The inline markup never reaches the translator — it's replaced with neutral
  * tokens and the real elements are reconstituted at render (see richtext.ts in

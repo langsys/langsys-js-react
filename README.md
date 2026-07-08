@@ -188,15 +188,15 @@ The component:
 </Translate>
 ```
 
-`<Translate>` also accepts `params` for `{key}` interpolation — the same single-brace syntax as `t()` — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting. Change `params` after mount and the block re-renders:
+`<Translate>` also accepts `params` for placeholder interpolation. Write placeholders as **`%key%`** directly in the markup — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting. Change `params` after mount and the block re-renders:
 
 ```tsx
 <Translate category="Cart" params={{ count: itemCount }}>
-    You have {'{count}'} items in your cart.
+    You have %count% items in your cart.
 </Translate>
 ```
 
-> **Write the placeholder as `{'{count}'}`, not bare `{count}`.** In JSX a literal `{count}` is a JavaScript expression — React evaluates and substitutes it *before* the SDK's DOM walker ever sees the text, so the braces are gone: the phrase registers pre-substituted (re-registering on every value change) and `params` has nothing to interpolate. It looks fine in the base locale, which hides the breakage. The string-literal form `{'{count}'}` emits real `{count}` text into the DOM for the SDK to interpolate. Same rule as `<Phrase>` above. (Passing values through `params` — not into the markup — is always safe.)
+> **Use `%key%` in `<Translate>`/`<Phrase>` markup, not bare `{key}`.** In JSX a literal `{count}` is a JavaScript expression that React evaluates *before* the SDK's DOM walker sees the text — the braces vanish and interpolation silently breaks (it still looks fine in the base locale, which hides it). `%count%` passes through JSX as plain text; the SDK normalizes it to canonical `{count}` at capture, so **translators and the catalog only ever see `{count}`**, and both spellings hash to the same content-block id. Keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left untouched. An unknown `%key%` with no matching param renders as `{key}` — matching `t()`'s behavior for unknown keys. (`t()` and the hooks keep `{key}`: JS strings reach the SDK literally, so there's no collision.)
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
@@ -208,13 +208,13 @@ Keeps a run that contains inline markup as **one** translatable phrase — so a 
 import { Phrase } from 'langsys-js-react';
 
 <Phrase category="ProductCard" params={{ n: reviewCount }}>
-    Based on {'{n}'} <strong>reviews</strong>
+    Based on %n% <strong>reviews</strong>
 </Phrase>
 ```
 
 The inline elements never reach the translator — they're replaced with neutral markup tokens (`{m0o}`…`{m0c}`) and the real framework-owned elements are reconstituted around the translated text at render. This is also what lets reordering languages move emphasis correctly (`<span>White</span> House` → `Casa <span>Blanca</span>`). Pass interpolation values via `params`; keep the markup children static.
 
-> Note: in JSX a literal `{n}` is an expression, so write it as `{'{n}'}` to emit the placeholder text.
+> Note: write placeholders as `%n%` in `<Phrase>` markup (see the `<Translate>` note above) — a bare `{n}` in JSX is an expression and never reaches the SDK.
 
 `<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `className?`, `children`.
 

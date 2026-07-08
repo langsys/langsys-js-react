@@ -46,6 +46,7 @@ function Demo({ locale, setLocale }: { locale: string; setLocale: (l: string) =>
     // signature is `t(phrase, category?, params?)`.
     const t = useT();
     const loadedLocale = useCurrentLocale();
+    const [cartCount, setCartCount] = useState(3);
 
     return (
         <main style={styles.main}>
@@ -82,6 +83,21 @@ function Demo({ locale, setLocale }: { locale: string; setLocale: (l: string) =>
                         'Demo'
                     )}
                 </p>
+            </section>
+
+            <section style={styles.card}>
+                <h2>{t('Content-block interpolation', 'Demo')}</h2>
+                {/* Placeholders in <Translate> markup use %key% — a bare {count} in JSX is a JS
+                    expression React would evaluate before the SDK sees the text. The SDK
+                    normalizes %count% to canonical {count} at capture (translators see {count}).
+                    Changing params calls setParams and re-renders the block in place. */}
+                <Translate category="Cart" params={{ count: cartCount }} tag="p">
+                    You have %count% items in your cart.
+                </Translate>
+                <div style={styles.row}>
+                    <button onClick={() => setCartCount((n) => Math.max(0, n - 1))}>−</button>
+                    <button onClick={() => setCartCount((n) => n + 1)}>+</button>
+                </div>
             </section>
 
             <section style={styles.card}>

@@ -14,8 +14,9 @@ export interface TranslateProps {
     /** Optional human-readable label shown in the Translation Manager. */
     label?: string;
     /**
-     * Interpolation params applied to the resolved text (single-brace `{key}`,
-     * same syntax as `t()`). Applied to content-block text nodes, translatable
+     * Interpolation params. Write placeholders as `%key%` in the markup (a bare
+     * `{key}` in JSX is a JS expression; the SDK normalizes `%key%` to canonical
+     * `{key}` at capture). Applied to content-block text nodes, translatable
      * attributes, `<option>` text, and single-token content — including
      * untranslated fallbacks. Number/Date values get CLDR locale formatting.
      */
