@@ -188,7 +188,15 @@ The component:
 </Translate>
 ```
 
-`<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `className?`, `children`.
+`<Translate>` also accepts `params` for `{key}` interpolation — the same single-brace syntax as `t()` — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting. Change `params` after mount and the block re-renders:
+
+```tsx
+<Translate category="Cart" params={{ count: itemCount }}>
+    You have {'{count}'} items in your cart.
+</Translate>
+```
+
+`<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
 ### `<Phrase>` — markup-bearing phrases (pluralization)
 

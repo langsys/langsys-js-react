@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Translate as VanillaTranslate } from 'langsys-js-typescript';
+import { Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
 
 /**
  * Props for the React `Translate` component. Mirrors the Svelte component's
@@ -13,6 +13,13 @@ export interface TranslateProps {
     custom_id?: string;
     /** Optional human-readable label shown in the Translation Manager. */
     label?: string;
+    /**
+     * Interpolation params applied to the resolved text (single-brace `{key}`,
+     * same syntax as `t()`). Applied to content-block text nodes, translatable
+     * attributes, `<option>` text, and single-token content — including
+     * untranslated fallbacks. Number/Date values get CLDR locale formatting.
+     */
+    params?: Record<string, ParamPrimitive>;
     /** Host element tag. Defaults to a `<translate>` custom element. */
     tag?: string;
     /** Class applied to the host element. */
@@ -40,18 +47,31 @@ export function Translate({
     category = '',
     custom_id = '',
     label = '',
+    params,
     tag = 'translate',
     className,
     children,
 }: TranslateProps) {
     const hostRef = useRef<HTMLElement | null>(null);
+    const instanceRef = useRef<VanillaTranslate>(undefined);
 
     useEffect(() => {
         const host = hostRef.current;
         if (!host) return;
-        const instance = new VanillaTranslate(host, { category, custom_id, label });
-        return () => instance.destroy();
+        const instance = new VanillaTranslate(host, { category, custom_id, label, params });
+        instanceRef.current = instance;
+        return () => {
+            instance.destroy();
+            instanceRef.current = undefined;
+        };
+        // Recreate only when the identity props change; param changes flow through setParams below.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [category, custom_id, label]);
+
+    // Re-render on changed params after mount, mirroring <Phrase>.
+    useEffect(() => {
+        instanceRef.current?.setParams(params);
+    });
 
     return createElement(tag, { ref: hostRef, className }, children);
 }
