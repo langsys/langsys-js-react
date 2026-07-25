@@ -23,6 +23,7 @@ import {
     type TArgs,
     type TFunction,
     type TranslationParams,
+    type WriteGrant,
     type iCategories,
     type iContentBlock,
     type iCountry,
@@ -43,7 +44,13 @@ import {
 // Reactive primitives (raw signals) — re-exported for advanced/direct
 // subscription. `tSignal` is exposed under the friendlier name `t`. In
 // components, prefer the hooks (`useT`, `useCurrentLocale`, …).
-export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from 'langsys-js-typescript';
+export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t, writeEnabled } from 'langsys-js-typescript';
+
+// Write grant — supply a short-lived token after `init()` (e.g. once the user
+// logs in) so the server re-evaluates the session as write-enabled. Standalone
+// alias for `LangsysApp.setWriteGrant`; both re-authorize and resolve when the
+// server has answered.
+export { setWriteGrant } from 'langsys-js-typescript';
 
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
@@ -55,7 +62,7 @@ export { LangsysAppAPI } from 'langsys-js-typescript';
 
 // Hooks + adapters (the React-idiomatic reactive layer)
 export { createLocaleStore, useSignal } from './adapters.js';
-export { useCurrentLocale, useLocaleStore, useT, useTranslations } from './hooks.js';
+export { useCurrentLocale, useLocaleStore, useT, useTranslations, useWriteEnabled } from './hooks.js';
 
 // Components
 export { Translate, type TranslateProps } from './components/Translate.js';
@@ -72,6 +79,7 @@ export type {
     TArgs,
     TFunction,
     TranslationParams,
+    WriteGrant,
     iCategories,
     iContentBlock,
     iCountry,
@@ -130,6 +138,24 @@ class LangsysAppReact {
 
     public refresh() {
         return _LangsysApp.refresh();
+    }
+
+    /**
+     * Supply or replace the write grant after `init()` — the login-walled case,
+     * where the token only exists once the user has authenticated.
+     *
+     * This re-authorizes so the server re-evaluates the session with the new
+     * `X-Write-Grant` header, then applies the returned `write_enabled`. Await it
+     * if you need to know the session flipped; misses occurring after it lands
+     * register directly, while earlier ones were already reported by the
+     * discovery lane.
+     *
+     * Prefer the function form of `writeGrant` at `init()` where you can: the
+     * grant is short-lived, and a provider is called fresh for each request
+     * rather than expiring mid-session.
+     */
+    public setWriteGrant(grant: WriteGrant | undefined): Promise<void> {
+        return _LangsysApp.setWriteGrant(grant);
     }
 
     public getCountries(inLocale?: string) {

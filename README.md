@@ -64,7 +64,6 @@ export function LangsysGate({ children }: { children: ReactNode }) {
             UserLocaleStore: localeStore,
             baseLocale: 'en-US',
             debug: false,
-            ssrTokenStrategy: 'client',
         }).then((res) => {
             if (res.status) setReady(true);
             else setError(res.errors?.join(', ') ?? 'Init failed');
@@ -83,11 +82,15 @@ Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+): lowerc
 
 ### SSR token strategy
 
-`ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
+`ssrTokenStrategy` (default `'client'`) controls when tokens found during a *server* render are registered. It acts on an SDK instance running inside the rendering process, so it does something only if `LangsysApp.init()` has run in that process.
 
-- `'client'` — tokens collected on the server are flushed from the client after hydration. Best for performance.
-- `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
-- `'auto'` — small batches (≤5) sent from server, larger queued for client.
+**In a client-only app like the one above, and in Next.js as documented in [README-SSR.md](./README-SSR.md), it is inert** — `init()` runs in a `useEffect`, which never executes on the server, so there is no instance for the option to act on. See [Discovering server-rendered content](./README-SSR.md#discovering-server-rendered-content) for what that means for content rendered in Server Components, and how `<Translate>` / `<Phrase>` cover it.
+
+The option matters only in genuinely isomorphic deployments — a custom server, or same-process SSR where `init()` runs in the rendering process:
+
+- `'client'` (default) — nothing is registered from the server render; content that also renders on the client is caught there.
+- `'server'` — registered directly from the server render, originating from your server's IP rather than a browser's.
+- `'auto'` — small batches (≤5) from the server, larger ones deferred to the client.
 
 ## Using translations
 

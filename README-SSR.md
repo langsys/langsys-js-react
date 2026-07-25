@@ -196,6 +196,46 @@ export function LocaleSwitcher() {
 - Simple configuration.
 - Full TypeScript support, including compile-time-checked interpolation params on `t()`.
 
+## Discovering server-rendered content
+
+Automatic token discovery happens wherever `t()` runs. In both setups above the SDK is initialized inside a `useEffect`, and effects never run during server rendering — so **there is no configured SDK instance in the Node process at all**. Everything the SDK does happens in the browser.
+
+That is fine for most content, but it has one consequence worth understanding before you rely on discovery:
+
+| What renders the text | Discovered? | Why |
+| --- | --- | --- |
+| `t()` in a Client Component | Yes | It runs again in the browser during hydration, and the miss is caught there. |
+| `<Translate>` / `<Phrase>` | Yes | They tokenize the delivered DOM on mount, whichever side rendered it. |
+| `t()` in a Server Component | **No** | It executes only in Node, emits plain text with no marker, and no client-side `t()` ever runs for it. |
+
+A bare `t('Welcome', 'HomePage')` inside a Server Component renders correct-looking base-language text and registers nothing — in every environment, including local development. Because the server has no initialized SDK instance, it also has no catalog, so such a call always renders the base language regardless of the user's locale. `ssrTokenStrategy` does not change any of this (see below).
+
+To make server-rendered content translatable and discoverable, wrap it in `<Translate>` or `<Phrase>`. Both are Client Components, and this package ships no `'use client'` directive, so re-export them through a file of your own that has one:
+
+```tsx
+// app/langsys-client.tsx
+'use client';
+export { Translate, Phrase, DontTranslate } from 'langsys-js-react';
+```
+
+```tsx
+// app/Hero.tsx — a Server Component
+import { Translate } from './langsys-client';
+
+export default function Hero() {
+    return (
+        <Translate category="HomePage">
+            <h1>Welcome</h1>
+            <p>Start your free trial today.</p>
+        </Translate>
+    );
+}
+```
+
+The children are server-rendered as normal; the client instance walks the delivered DOM on mount, registers the tokens, and re-translates on locale change.
+
+If you'd rather not wrap it, register those phrases another way — through the Translation Manager, or from a client-rendered path that exercises the same strings.
+
 ## Configuration options
 
 ### SSR token strategy
@@ -204,9 +244,17 @@ export function LocaleSwitcher() {
 { ssrTokenStrategy: 'client' | 'server' | 'auto' }
 ```
 
-- `'client'` (default) — queue tokens, send from client after hydration.
-- `'server'` — send tokens immediately from server.
-- `'auto'` — small batches (≤5) from server, larger batches from client.
+This controls when tokens found during a *server* render are registered. It acts on an SDK instance running inside the rendering process, so it only does anything if `LangsysApp.init()` has run in that process.
+
+**In the Next.js setups above it is inert** — `init()` runs in a `useEffect`, so no such instance exists and the option has nothing to act on. Leave it at the default and use the guidance in [Discovering server-rendered content](#discovering-server-rendered-content) instead.
+
+The option is meaningful only in genuinely isomorphic deployments — a custom server, or same-process SSR where `init()` runs in the rendering process:
+
+- `'client'` (default) — nothing is registered from the server render. Content that also renders on the client is caught there, when `t()` runs in the browser. (Base SDK 0.5.0+ skips collecting these entirely; earlier versions queue them in the server process and never drain that queue.)
+- `'server'` — tokens are registered directly from the server render. Note that this originates from your server's IP rather than a browser's.
+- `'auto'` — small batches (≤5) registered from the server, larger ones deferred to the client.
+
+One constraint on isomorphic use: the catalog and locale stores are module-scope singletons, so a rendering process is effectively single-locale. Concurrent requests for different locales share one catalog and will show each other's language.
 
 ### Debug mode
 
@@ -225,8 +273,8 @@ Look for:
 2. **Matching locales.** Always provide `initialTranslationsLocale` with `initialTranslations` so the SDK knows what locale the data represents.
 3. **Data format.** The translations payload must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
 4. **Cache.** The 60-second locale cache still applies. Pre-fetched translations count as cached.
-5. **Token creation.** Use a read-only API key for the client in production — missing tokens won't be sent. Keep the write key on the server (and ideally pre-populate tokens via your local dev environment).
-6. **`'use client'`.** `useT`, `useLocaleStore`, `<Translate>`, and `LangsysApp.init` run on the client — keep them in Client Components.
+5. **Token creation.** Use a read-only API key in the client in production — anything shipped in public JS is extractable, and with a read-only key missing tokens simply aren't sent. Populate the catalog from your development environment instead, where a write key stays on your own machine. Note that a write key handed to the Next server does nothing on its own: there is no SDK instance there to use it.
+6. **`'use client'`.** `useT`, `useLocaleStore`, `<Translate>`, `<Phrase>`, and `LangsysApp.init` all run on the client, and this package ships no `'use client'` directive — put them behind a Client Component boundary of your own, as in the `LangsysClient` and `langsys-client.tsx` examples above. This applies to *every* import from `langsys-js-react`, not just the hooks and components: the package builds to a single bundled module that imports React hooks, so pulling any export of it into a Server Component pulls in that module. For the parts you legitimately want on the server — `LangsysAppAPI`, or `detectPreferredLocale()` against an `Accept-Language` header — import them from `langsys-js-typescript` instead. It's this package's own dependency, it's already in your tree, and it has no React in it.
 
 ## Troubleshooting
 

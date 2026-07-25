@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { currentlyLoadedLocale, sTranslations, tSignal } from 'langsys-js-typescript';
+import { useState, useSyncExternalStore } from 'react';
+import { currentlyLoadedLocale, sTranslations, tSignal, writeEnabled } from 'langsys-js-typescript';
 import type { Signal, TFunction, iCategories } from 'langsys-js-typescript';
 import { createLocaleStore, useSignal } from './adapters.js';
 
@@ -55,4 +55,35 @@ export function useLocaleStore(initial = 'en-US'): [string, (locale: string) => 
     const [store] = useState(() => createLocaleStore(initial));
     const locale = useSignal(store);
     return [locale, store.set, store];
+}
+
+/**
+ * Stable server snapshot for `useWriteEnabled`. Must be module-level so its
+ * identity never changes across renders.
+ */
+const writeEnabledServerSnapshot = (): undefined => undefined;
+
+/**
+ * Whether the current session may register content, as decided by the server.
+ *
+ * Tri-state, and the three states are genuinely distinct:
+ *   - `undefined` — authorization hasn't landed yet. Not the same as read-only.
+ *   - `false`     — read-only session; the SDK reports the page URL instead.
+ *   - `true`      — this session registers content directly.
+ *
+ * Don't collapse it to a boolean and don't default `undefined` to `false`: the
+ * same key can be write-enabled from one IP and read-only from another, so only
+ * the server can answer, and "not yet known" is a real state to render for.
+ *
+ * Unlike the other hooks this does *not* go through `useSignal`. `writeEnabled`
+ * is browser-authoritative — it is only ever written client-side and stays
+ * `undefined` during SSR. Reusing `useSignal` would pass `signal.get` as the
+ * server snapshot, and `getServerSnapshot` is used both on the server *and* for
+ * the hydration render on the client. If authorization resolved before
+ * hydration, that render would disagree with the server HTML and React would
+ * throw the markup away. Pinning the server snapshot to `undefined` keeps the
+ * hydration pass matching the server; the real value arrives right after.
+ */
+export function useWriteEnabled(): boolean | undefined {
+    return useSyncExternalStore(writeEnabled.subscribe, writeEnabled.get, writeEnabledServerSnapshot);
 }
