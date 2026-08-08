@@ -1,3 +1,9 @@
+## 0.4.2 - 2026-07-08
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.4.2`** — adds a debug-mode diagnostic that catches a mistaken bare `{key}` in `<Translate>`/`<Phrase>` JSX markup: if `params` keys match no placeholder in the captured content, the SDK warns and names the fix (`write %count% instead`). Silent in production, treats ICU slots as legitimate, and only re-warns when the param key-set changes. Documented in the README `%key%` guidance. No wrapper code change — the components inherit it through the base SDK.
+
 ## 0.4.1 - 2026-07-08
 
 ### Changed

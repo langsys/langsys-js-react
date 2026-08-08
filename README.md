@@ -198,6 +198,8 @@ The component:
 
 > **Use `%key%` in `<Translate>`/`<Phrase>` markup, not bare `{key}`.** In JSX a literal `{count}` is a JavaScript expression that React evaluates *before* the SDK's DOM walker sees the text — the braces vanish and interpolation silently breaks (it still looks fine in the base locale, which hides it). `%count%` passes through JSX as plain text; the SDK normalizes it to canonical `{count}` at capture, so **translators and the catalog only ever see `{count}`**, and both spellings hash to the same content-block id. Keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left untouched. An unknown `%key%` with no matching param renders as `{key}` — matching `t()`'s behavior for unknown keys. (`t()` and the hooks keep `{key}`: JS strings reach the SDK literally, so there's no collision.)
 
+> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production, treats ICU slots as legitimate, and only re-warns when the set of param keys changes.
+
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
 ### `<Phrase>` — markup-bearing phrases (pluralization)
