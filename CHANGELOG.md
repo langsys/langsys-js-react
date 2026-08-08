@@ -1,3 +1,9 @@
+## 0.4.3 - 2026-07-08
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.4.3`** — corrects the debug diagnostic's wording to be framework-neutral (it previously hardcoded "the framework compiler (Svelte/JSX)" and the `{key}` spelling, which misdiagnosed Vue's `{{ key }}`). Behavior is unchanged; React users just get clearer text. The README's quotation of the warning elides that sentence, so no doc change was needed.
+
 ## 0.4.2 - 2026-07-08
 
 ### Changed
