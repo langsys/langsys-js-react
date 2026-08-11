@@ -68,6 +68,7 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
     const page = await context.newPage();
 
     const api = [];
+    const byRequest = new Map();
     page.on('request', (req) => {
         const url = req.url();
         if (!url.includes('langsys2.test')) return;
@@ -77,7 +78,21 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
         } catch {
             body = undefined;
         }
-        api.push({ method: req.method(), url, body, headers: req.headers() });
+        // `status` stays null until the response lands. Asserting only on what was
+        // SENT is not enough: a server that rejects every registration still
+        // produces perfect-looking request payloads, and the suite would pass
+        // while nothing was actually registered.
+        const entry = { method: req.method(), url, body, headers: req.headers(), status: null, error: null };
+        byRequest.set(req, entry);
+        api.push(entry);
+    });
+    page.on('response', (res) => {
+        const entry = byRequest.get(res.request());
+        if (entry) entry.status = res.status();
+    });
+    page.on('requestfailed', (req) => {
+        const entry = byRequest.get(req);
+        if (entry) entry.error = req.failure()?.errorText ?? 'failed';
     });
 
     const consoleErrors = [];
@@ -102,10 +117,14 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
         writeEnabled: () => page.textContent('[data-testid="write-enabled"]'),
         registrations: () => api.filter((r) => r.url.includes('translatable-items')),
         hints: () => api.filter((r) => r.url.includes('discovery/hint')),
-        /** Every phrase string the browser has POSTed for registration. */
+        /**
+         * Phrases the server ACCEPTED. Deliberately filtered on a 2xx response
+         * rather than on the request having been sent — "registered" means the
+         * server took it, not that we asked.
+         */
         registeredPhrases: () =>
             api
-                .filter((r) => r.url.includes('translatable-items') && r.body)
+                .filter((r) => r.url.includes('translatable-items') && r.body && r.status >= 200 && r.status < 300)
                 .flatMap((r) => {
                     try {
                         return (JSON.parse(r.body).translatable_items ?? []).map((i) => i.phrase);
@@ -113,6 +132,9 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
                         return [];
                     }
                 }),
+        /** Registration attempts that did NOT come back 2xx. */
+        failedRegistrations: () =>
+            api.filter((r) => r.url.includes('translatable-items') && (r.error || (r.status !== null && (r.status < 200 || r.status >= 300)))),
         /** Returns as soon as at least one hint has been sent. */
         waitForHint: async () => {
             const deadline = Date.now() + HINT_MAX_WAIT_MS;
@@ -136,7 +158,7 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
             const deadline = Date.now() + timeoutMs;
             while (Date.now() < deadline) {
                 const found = api
-                    .filter((r) => r.url.includes('translatable-items') && r.body)
+                    .filter((r) => r.url.includes('translatable-items') && r.body && r.status >= 200 && r.status < 300)
                     .some((r) => r.body.includes(needle));
                 if (found) return true;
                 await page.waitForTimeout(400);
@@ -186,6 +208,14 @@ async function main() {
 
         const gotHero = await tb.waitForRegistrationOf(`E2E react ${run} hero`);
         check('write: registers rendered phrases directly', gotHero);
+        // Guards the blind spot: without this the suite passes while the server
+        // rejects every registration, because the request payloads look perfect.
+        const failed = tb.failedRegistrations();
+        check(
+            'write: the server ACCEPTED the registrations',
+            failed.length === 0,
+            failed.length ? `${failed.length} non-2xx: ${[...new Set(failed.map((f) => f.error ?? f.status))].join(', ')}` : '',
+        );
 
         const phrases = tb.registeredPhrases();
         // --- the three discovery shapes ---
