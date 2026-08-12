@@ -342,11 +342,19 @@ async function main() {
             const run = runId();
             const ttl = 60;
             console.log(`\n[grant: expires mid-session, ttl=${ttl}s] run=${run}`);
-            const tb = await openTestbed(browser, {
-                keyType: 'read',
-                run,
-                extraParams: `&grant=${mintGrant({ expiresInSec: ttl })}`,
-            });
+            const tb = await openTestbed(browser, { keyType: 'read', run });
+            // Mint AFTER init, not before page load. Minting up front makes the
+            // token's remaining life depend on how long navigation and init took,
+            // which on a loaded API can be most of a 60s budget — the lane would
+            // then fail for latency reasons while claiming the grant was refused.
+            // The point under test is "a token that is fresh AT APPLY TIME is
+            // accepted", so mint it as late as possible and inject it into the URL
+            // the click handler reads.
+            await tb.page.evaluate((g) => {
+                const u = new URL(window.location.href);
+                u.searchParams.set('grant', g);
+                window.history.replaceState({}, '', u);
+            }, mintGrant({ expiresInSec: ttl }));
             await applyGrant(tb);
             check('expiry: short-lived grant is accepted while fresh', (await tb.writeEnabled()) === 'true', await tb.writeEnabled());
 
