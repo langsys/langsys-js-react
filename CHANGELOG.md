@@ -1,3 +1,13 @@
+## 0.5.0 - 2026-08-14
+
+### Breaking (compile-time only)
+
+- **`<Phrase params>` no longer accepts non-primitive values.** `PhraseProps.params` narrows from `Record<string, unknown>` to `Record<string, ParamPrimitive>` (`string | number | Date | boolean`), matching `<Translate params>` and `t()`. **If you pass an object, array, or function as a param value, it stops compiling** — e.g. `params={{ user: someUser }}`. That code was already rendering `[object Object]` at runtime, so this surfaces a latent bug rather than causing one, but it surfaces at build time. Pass the primitive you actually want interpolated (`params={{ name: user.name }}`). Code that *forwards* a `Record<string, unknown>` into the prop also needs its own type narrowed. Runtime behavior is unchanged.
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.5.0`**, which narrows `PhraseOptions.params` the same way and adds `undefined` to `Phrase.setParams()` (no effect here — this wrapper always passes its defaulted `{}`). 0.5.0 also documents the `Phrase` class in the base README for the first time, plus the `<Translate>` per-text-node splitting caveat and a template-literal catalog-pollution warning.
+
 ## 0.4.3 - 2026-07-08
 
 ### Changed
