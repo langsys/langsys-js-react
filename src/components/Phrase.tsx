@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Phrase as VanillaPhrase } from 'langsys-js-typescript';
+import { Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
 
 /**
  * Props for the React `Phrase` component. Mirrors the Svelte component's props,
@@ -10,7 +10,7 @@ export interface PhraseProps {
     /** Category the phrase registers under (disambiguation for translators). */
     category?: string;
     /** Interpolation params. Write placeholders as `%n%` / `%name%` in the markup (a bare `{n}` in JSX is an expression). */
-    params?: Record<string, unknown>;
+    params?: Record<string, ParamPrimitive>;
     /** Host element tag. Defaults to `<span>`. */
     tag?: string;
     /** Class applied to the host element. */
