@@ -1,3 +1,9 @@
+## 0.6.1 - 2026-08-15
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.1`** — completes the `langsys-php` SSR interop from 0.6.0. `data-langsys-phrase="false"` and `="0"` are explicit author opt-outs, but 0.6.0 matched on attribute *presence* alone, so an author who deliberately un-marked a subtree got it skipped by this SDK and un-translated by PHP too — content translated by neither. No wrapper API change; inherited through the base SDK.
+
 ## 0.6.0 - 2026-08-15
 
 ### Changed
