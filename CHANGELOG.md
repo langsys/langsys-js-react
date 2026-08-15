@@ -1,3 +1,15 @@
+## 0.6.0 - 2026-08-15
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.0`.** No wrapper API change; both fixes are inherited through the base SDK classes these components delegate to.
+    - **`custom_id` correctness** — the base `md5` packed UTF-16 code units into byte lanes, so it only matched a real MD5 for ASCII. Non-ASCII content diverged from `langsys-php` and could rarely collide with itself. Pure-ASCII ids are byte-identical to before, so **only non-ASCII content blocks rebase**, and migration is automatic and lookup-only: the corrected id is tried first with the legacy id as fallback, and registration always writes the corrected id.
+    - **SSR handoff with `langsys-php`** — the tokenizer now recognises PHP's `data-langsys-phrase` keep-together marker alongside our `data-ls-phrase`. Previously, on a DOM walked by both SDKs, ours recursed into subtrees PHP had kept whole and **split phrases at tag boundaries** — the exact failure `<Phrase>` exists to prevent.
+
+### Internal
+
+- `<Phrase>` now emits its marker via the base SDK's exported `PHRASE_MARKER_ATTR` instead of a hardcoded `'data-ls-phrase'` string. Rendered output is byte-identical (covered by the existing component test); this removes the chance of silent drift if the marker is ever renamed upstream.
+
 ## 0.5.0 - 2026-08-14
 
 ### Breaking (compile-time only)

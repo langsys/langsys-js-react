@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
+import { Phrase as VanillaPhrase, PHRASE_MARKER_ATTR, type ParamPrimitive } from 'langsys-js-typescript';
 
 /**
  * Props for the React `Phrase` component. Mirrors the Svelte component's props,
@@ -62,7 +62,7 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
         instanceRef.current?.setParams(params);
     });
 
-    return createElement(tag, { ref: hostRef, className, 'data-ls-phrase': '' }, children);
+    return createElement(tag, { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' }, children);
 }
 
 export default Phrase;
