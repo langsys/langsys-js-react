@@ -62,7 +62,10 @@
 
 ### Changed
 
-- **Base SDK range bumped to `langsys-js-typescript@^0.2.2`** (from `^0.2.0`), picking up the base-SDK fixes released in 0.2.1–0.2.2. See the [base SDK changelog](https://github.com/langsys/langsys-js-typescript/blob/main/CHANGELOG.md) for what those carried. No React wrapper API change.
+- **Base SDK range bumped to `langsys-js-typescript@^0.2.2`** (from `^0.2.0`). No React wrapper API change. What that picked up:
+    - *base 0.2.1* — migration off deprecated API routes (reads via `GET /translations`, writes via `POST /translatable-items` with a unified body); missing-phrase registration now chunks into batches of 200.
+    - *base 0.2.2* — SSR-only fix: switching **back** to the initial/SSR locale left the previous language on screen, because every return to the initial locale skipped the store updates that rebuild the `t` signal.
+    - Because `^0.2.2` also admits later 0.2.x patches, installs of this release resolve *base 0.2.3* as well — an SSR-only fix where `ready()` never settled on a seeded catalog. In this wrapper that presented as `<Translate>` / `<Phrase>` mounting but never rendering a translation on an SSR-seeded page.
 
 ### Tooling
 
