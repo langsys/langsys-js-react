@@ -56,6 +56,19 @@
 
 - **`canonicalizeLocale(locale)`** re-export — normalize a locale identifier to canonical BCP 47 the same way the SDK does, for comparing your own values against `useCurrentLocale()` / `detectPreferredLocale()`.
 
+## 0.2.1 - 2026-06-24
+
+> Reconstructed from git history on 2026-08-15 — this release shipped without a changelog entry.
+
+### Changed
+
+- **Base SDK range bumped to `langsys-js-typescript@^0.2.2`** (from `^0.2.0`), picking up the base-SDK fixes released in 0.2.1–0.2.2. See the [base SDK changelog](https://github.com/langsys/langsys-js-typescript/blob/main/CHANGELOG.md) for what those carried. No React wrapper API change.
+
+### Tooling
+
+- CI and publish workflows moved to Node 24 (`checkout@v4→v5`, `setup-node@v4→v5`), clearing the Node 20 runtime deprecation warnings.
+- Corrected the npm-bundling comment in `publish.yml`: Node 24 ships npm 11.3.x, still below the 11.5.1 floor for OIDC trusted publishing.
+
 ## 0.2.0 - 2026-06-11
 
 ### Added
