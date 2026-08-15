@@ -43,6 +43,12 @@ rollback() {
             rm -f package.json.bak
         fi
 
+        # Un-stamp the CHANGELOG heading if we dated it this run
+        if [ -n "$RELEASE_DATE" ] && [ -f "CHANGELOG.md" ]; then
+            sed -i.bak "s/^## $NEW_VERSION - $RELEASE_DATE\$/## $NEW_VERSION - unreleased/" CHANGELOG.md
+            rm -f CHANGELOG.md.bak
+        fi
+
         # Reset git if changes were committed (restore original commit before amend)
         if [ "$CHANGES_COMMITTED" = true ]; then
             # Since we amended the commit, we need to restore the original
@@ -188,6 +194,32 @@ else
 fi
 log_success "Updated package.json version to $NEW_VERSION"
 
+# Stamp the CHANGELOG heading with the release date.
+#
+# Write entries as "## X.Y.Z - unreleased"; this fills in the date here, seconds
+# before the tag and publish. A heading typed at authoring time records when it
+# was TYPED, not when it shipped — that's what silently dated 0.4.2/0.4.3 a month
+# early. Stamping at release time keeps the heading in agreement with npm's
+# publish record, so the post-release `npm view <pkg> time --json` check has
+# nothing left to find.
+RELEASE_DATE=$(date -u +%Y-%m-%d)
+if grep -q "^## $NEW_VERSION - unreleased\$" CHANGELOG.md; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^## $NEW_VERSION - unreleased\$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+    else
+        sed -i "s/^## $NEW_VERSION - unreleased\$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+    fi
+    log_success "Stamped CHANGELOG heading for $NEW_VERSION with $RELEASE_DATE"
+elif grep -q "^## $NEW_VERSION " CHANGELOG.md; then
+    log_warning "CHANGELOG section for $NEW_VERSION already carries a date — leaving it alone"
+    log_warning "  (verify it against: npm view $(node -p "require('./package.json').name") time --json)"
+else
+    log_warning "No CHANGELOG section found for $NEW_VERSION — releasing an undocumented version"
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] || handle_error "Aborted: add a CHANGELOG section for $NEW_VERSION first"
+fi
+
 # Run npm install to update package-lock.json
 log_info "Running npm install to update package-lock.json..."
 npm install
@@ -198,7 +230,7 @@ npm run build
 
 # Amend the last commit with version bump
 log_info "Amending last commit with version bump..."
-git add package.json package-lock.json
+git add package.json package-lock.json CHANGELOG.md
 
 # Get the current commit message
 LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)

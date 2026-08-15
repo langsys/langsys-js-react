@@ -102,7 +102,9 @@ Releases are CI-driven via npm **trusted publishing** (OIDC). There is no long-l
 
 The flow:
 
-1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release. **It does not publish to npm.**
+1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, stamps the CHANGELOG heading with the release date, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release. **It does not publish to npm.**
+
+    > **Write CHANGELOG headings as `## X.Y.Z - unreleased`.** The release script fills in the date immediately before tagging. A heading dated by hand records when it was *typed*, not when it shipped — that silently dated 0.4.2/0.4.3 a month early, and four of this repo's nine entries were wrong before an audit against `npm view langsys-js-react time --json` caught them. The script warns if the version being released has no CHANGELOG section, and prompts before releasing an undocumented version.
 2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run typecheck` → `npm test` → `npm run build` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
 3. **PR/push gate:** `.github/workflows/ci.yml` runs `typecheck` + `test` on every PR and every push to `main`, independent of the release flow.
 
