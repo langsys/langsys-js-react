@@ -1,3 +1,13 @@
+## 0.6.6 - 2026-08-16
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.5`** — adds a debug-mode warning when a locale tag isn't valid BCP 47. Relevant here because the locale you set via `useLocaleStore` / `createLocaleStore` is exactly what reaches that check. `canonicalizeLocale` still falls back to best-effort casing rather than throwing, so behavior and return values are unchanged and it's silent in production — but a typo'd tag (`'en-USA'`, `'eng'`) previously degraded to a failed catalog lookup that renders base language, which is indistinguishable from a locale that simply has no translations yet. The warning fires where that distinction still exists.
+
+### Docs
+
+- **README shields standardized** under the H1, matching the other Langsys SDKs. Two defects in the previous block are fixed: the license badge queried `npm/l/all-contributors` — a *different package's* license, which rendered "MIT" correctly while reporting someone else's — and four of five badges had empty link targets that navigated nowhere. Both were invisible to inspection, since a badge is checked by looking at it and neither the wrong query nor the dead link changes how the row looks.
+
 ## 0.6.5 - 2026-08-16
 
 ### Fixed (documentation)
