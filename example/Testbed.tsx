@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 // The playground imports library source directly so edits hot-reload.
 import {
     LangsysApp,
@@ -14,7 +14,7 @@ import {
 /**
  * E2E testbed for write-key gating & content discovery (ticket 838).
  *
- * Driven by `example/e2e/write-gating.spec.ts`. Everything it needs to assert is
+ * Driven by `example/e2e/write-gating.mjs`. Everything it needs to assert is
  * either exposed as a `data-testid` or observable on the wire, so the harness
  * verifies what actually happened rather than what the code appears to do.
  *
@@ -50,8 +50,11 @@ function params() {
  * Releasing it proves the phrase *would* have registered, so the pending
  * assertion isn't vacuous.
  */
-let releaseLazyChild!: (mod: { default: () => JSX.Element }) => void;
-const lazyChildModule = new Promise<{ default: () => JSX.Element }>((resolve) => {
+// `ReactElement`, not the bare global `JSX.Element`: React 19's types drop the
+// global JSX namespace, so `JSX.Element` is TS2503 here. It compiles today only
+// because tsconfig excludes example/ and Vite transpiles without checking.
+let releaseLazyChild!: (mod: { default: () => ReactElement }) => void;
+const lazyChildModule = new Promise<{ default: () => ReactElement }>((resolve) => {
     releaseLazyChild = resolve;
 });
 const LazyChild = lazy(() => lazyChildModule);

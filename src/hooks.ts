@@ -68,7 +68,9 @@ const writeEnabledServerSnapshot = (): undefined => undefined;
  *
  * Tri-state, and the three states are genuinely distinct:
  *   - `undefined` — authorization hasn't landed yet. Not the same as read-only.
- *   - `false`     — read-only session; the SDK reports the page URL instead.
+ *   - `false`     — read-only session; the SDK may report the page URL instead,
+ *                   subject to the key's auto-discovery permission. A read-only
+ *                   key with discovery disallowed reports nothing at all.
  *   - `true`      — this session registers content directly.
  *
  * Don't collapse it to a boolean and don't default `undefined` to `false`: the

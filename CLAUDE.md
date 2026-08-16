@@ -51,6 +51,7 @@ useT()                  -> TFunction        // re-renders on translations/locale
 useCurrentLocale()      -> string           // loaded locale (lags UserLocaleStore until fetch settles)
 useTranslations()       -> iCategories      // raw catalog
 useLocaleStore(initial?) -> [locale, setLocale, Signal<string>]
+useWriteEnabled()       -> boolean | undefined  // server-decided write capability; TRI-STATE, see below
 useSignal(signal)       -> T               // low-level Signal → value bridge
 
 // Store factory + raw signals (advanced / direct subscription)
@@ -58,6 +59,11 @@ createLocaleStore(initial?)  // Signal<string> — the writable analog
 t, currentlyLoadedLocale, sTranslations  // raw Signals; prefer the hooks in components
 createSignal                 // re-exported generic Signal factory
 canonicalizeLocale(locale)   // re-exported BCP 47 normalizer ('en-us' → 'en-US'); the SDK canonicalizes all locale input since base 0.3.0
+
+// Write gating (ticket 838; requires base SDK 0.5.0+)
+writeEnabled                 // Signal<boolean | undefined> — server-decided, read-only, browser-authoritative
+setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
+writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
 
 // Component
 <Translate category? custom_id? label? tag? className? children />
@@ -119,6 +125,8 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - **Type re-exports go through `index.ts`.** Consumers shouldn't have to reach into `langsys-js-typescript` for routine types.
 - **The hooks' reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change *and* returning a stable reference between changes. If components don't re-render after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class. If you get an infinite render loop, suspect a signal whose `get()` returns a new reference on every call.
 - **Keep the locale store stable.** Never call `createLocaleStore()` inside render without memoizing — use `useLocaleStore` or `useState(() => createLocaleStore(...))`.
+- **Don't route `writeEnabled` through `useSignal`.** `useWriteEnabled` deliberately calls `useSyncExternalStore` itself with `getServerSnapshot` pinned to a module-level `() => undefined`. React uses that snapshot for the hydration render as well as the server render, and `writeEnabled` is browser-authoritative — so passing the live getter makes a session whose authorization resolved before hydration render markup that disagrees with the server HTML, and React throws the subtree away. This is the one place a binding-authored decision is correct rather than a smell: the *value* still comes from the core, only *when React may read it* is React-specific. Verify any change here by mutation (unpin the snapshot and confirm tests go red), not by a passing test — the tests pass against a broken implementation unless authorization resolves before hydration.
+- **Never branch on capability.** `write_enabled` is server-computed because the same key can be write-enabled from one IP and read-only from another. The React layer surfaces it and never infers it. Likewise no caching of lookups, no network scheduling, and no config keys the base SDK doesn't define.
 
 ## Testing approach
 

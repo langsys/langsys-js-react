@@ -10,8 +10,9 @@
  * Requires the Vite playground running (`npm run dev`) and the local API from
  * `.env` reachable.
  */
-import { chromium } from 'playwright';
+import { chromium, request } from 'playwright';
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 /**
  * Local dev signing secret for write grants. Local-only — the real one is a
@@ -44,6 +45,45 @@ const arg = (name, fallback) => {
 // the literal origin string and only answers `localhost`. A 127.0.0.1 origin gets
 // a 204 preflight with no Access-Control-Allow-Origin and every call fails.
 const BASE = arg('base', 'http://localhost:5174');
+/**
+ * API host the testbed talks to. Must track whatever `VITE_LANGSYS_BASE_URL`
+ * points the page at — the request-capture filter keys on it, and if the two
+ * disagree the harness records zero traffic: positive checks fail for the wrong
+ * reason and negative checks ("registers nothing") pass vacuously.
+ */
+function envFileValue(key) {
+    // Vite loads .env for the browser; node does not. Without reading it here the
+    // driver would fall back to the default while the testbed used the .env value,
+    // which is precisely the divergence this filter must not have.
+    for (const file of ['.env.local', '.env']) {
+        let text;
+        try {
+            text = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+        } catch {
+            continue;
+        }
+        const line = text
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => l.startsWith(`${key}=`));
+        if (line) return line.slice(key.length + 1).trim().replace(/^["']|["']$/g, '');
+    }
+    return undefined;
+}
+
+// Precedence: explicit --api, then the shell, then .env, then the default.
+const API_BASE = arg('api', process.env.VITE_LANGSYS_BASE_URL ?? envFileValue('VITE_LANGSYS_BASE_URL') ?? 'http://langsys2.test/api');
+const API_HOST = new URL(API_BASE).host;
+
+// Same source the testbed reads, so the driver and the page can never disagree
+// about which project/keys are under test.
+const envOr = (k) => process.env[k] ?? envFileValue(k);
+const KEYS = {
+    read: envOr('VITE_LANGSYS_KEY_READ'),
+    ip_write: envOr('VITE_LANGSYS_KEY_IP_WRITE'),
+    write: envOr('VITE_LANGSYS_KEY_WRITE'),
+};
+const AUTHORIZE_URL = `${API_BASE.replace(/\/$/, '')}/authorize-project/${envOr('VITE_LANGSYS_PROJECT_ID')}`;
 // The jitter window is 5–30s (HINT_MIN_DELAY_MS / HINT_MAX_DELAY_MS in the core),
 // so a hint assertion has to be willing to wait past the maximum.
 const HINT_MAX_WAIT_MS = 35_000;
@@ -71,7 +111,7 @@ async function openTestbed(browser, { keyType, run, extraParams = '' }) {
     const byRequest = new Map();
     page.on('request', (req) => {
         const url = req.url();
-        if (!url.includes('langsys2.test')) return;
+        if (!url.includes(API_HOST)) return;
         let body;
         try {
             body = req.postData();
@@ -184,9 +224,13 @@ async function main() {
             (await tb.writeEnabled()) === 'false',
             `got ${await tb.writeEnabled()}`,
         );
+        // Collect over the WHOLE jitter window before asserting either of these.
+        // Checking "registers nothing" the instant init settles would pass even in
+        // the regression it names, because no flush could have fired yet; and a
+        // duplicate hint drawing a longer delay would escape the exactly-one
+        // assertion entirely. Both only mean something once the window has closed.
+        const hints = await tb.collectAllHints();
         check('read: registers nothing', tb.registrations().length === 0, `${tb.registrations().length} POSTs`);
-
-        const hints = await tb.waitForHint();
         check('read: sends exactly one discovery hint', hints.length === 1, `${hints.length} hints`);
         if (hints.length) {
             const payload = JSON.parse(hints[0].body ?? '{}');
@@ -382,22 +426,52 @@ async function main() {
     }
     {
         const run = runId();
-        console.log(`\n[ip_write key, forwarded IP] run=${run}`);
-        const context = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '203.0.113.99' } });
-        const page = await context.newPage();
-        const api = [];
-        page.on('request', (r) => r.url().includes('langsys2.test') && api.push({ url: r.url(), body: r.postData() }));
+        console.log(`\n[ip_write key, forwarded IP]`);
+        // Asserted at the API level, NOT through a browser page — deliberately.
+        //
+        // Chromium strips `X-Forwarded-For` from page-initiated requests, so the
+        // browser cannot forge it: driving this lane through the page produced
+        // write_enabled=true (the server correctly seeing loopback) while the
+        // header appeared present in Playwright's own request record. It used to
+        // pass only because CORS did not yet allow `x-forwarded-for`, so the
+        // request was blocked outright and the lane never reached the server —
+        // a check that passed for the wrong reason.
+        //
+        // That Chromium refuses to send it is the correct security behaviour, so
+        // the right move is to prove the server's IP gate where the header can
+        // actually be set, and to record that a page can never spoof it.
+        const rc = await request.newContext({
+            extraHTTPHeaders: { 'x-Authorization': KEYS.ip_write, 'X-Forwarded-For': '203.0.113.99' },
+        });
+        const forwarded = await (await rc.get(AUTHORIZE_URL)).json().catch(() => ({}));
+        check(
+            'ip_write@forwarded: server reports write-enabled false',
+            forwarded?.data?.write_enabled === false,
+            `got ${forwarded?.data?.write_enabled} — same key, different IP; only the server can decide this`,
+        );
+        await rc.dispose();
+
+        const loopback = await request.newContext({ extraHTTPHeaders: { 'x-Authorization': KEYS.ip_write } });
+        const direct = await (await loopback.get(AUTHORIZE_URL)).json().catch(() => ({}));
+        check(
+            'ip_write@loopback: server reports write-enabled true (negative control)',
+            direct?.data?.write_enabled === true,
+            `got ${direct?.data?.write_enabled}`,
+        );
+        await loopback.dispose();
+
+        // And the security property itself: a browser page cannot forge the header.
+        const ctx = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '203.0.113.99' } });
+        const page = await ctx.newPage();
         await page.goto(`${BASE}/?testbed=1&key=ip_write&run=${run}`);
         await page.waitForSelector('[data-testid="write-enabled"]');
         await page.waitForTimeout(2000);
-        const we = await page.textContent('[data-testid="write-enabled"]');
-        check('ip_write@forwarded: write-enabled false', we === 'false', `got ${we}`);
         check(
-            'ip_write@forwarded: registers nothing',
-            !api.some((r) => r.url.includes('translatable-items')),
-            'same key, different IP — only the server can decide this',
+            'ip_write: a browser page cannot spoof X-Forwarded-For',
+            (await page.textContent('[data-testid="write-enabled"]')) === 'true',
+            'Chromium strips the header, so the server still sees the real client IP',
         );
-        await context.close();
+        await ctx.close();
     }
 
     // --------------------------------------------- URL captured at miss time
