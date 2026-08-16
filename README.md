@@ -1,5 +1,14 @@
 # Langsys SDK - React
 
+[![npm](https://img.shields.io/npm/v/langsys-js-react.svg?style=flat)](https://www.npmjs.com/package/langsys-js-react)
+[![build](https://img.shields.io/github/actions/workflow/status/langsys/langsys-js-react/ci.yml?style=flat)](https://github.com/langsys/langsys-js-react/actions)
+[![last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-react.svg?style=flat)](https://github.com/langsys/langsys-js-react/commits)
+[![commit activity](https://img.shields.io/github/commit-activity/m/langsys/langsys-js-react.svg?style=flat)](https://github.com/langsys/langsys-js-react/pulse)
+[![bundle size](https://img.shields.io/bundlejs/size/langsys-js-react?style=flat)](https://bundlejs.com/?q=langsys-js-react)
+[![types](https://img.shields.io/npm/types/langsys-js-react.svg?style=flat)](https://www.npmjs.com/package/langsys-js-react)
+[![downloads](https://img.shields.io/npm/dm/langsys-js-react.svg?style=flat)](https://www.npmjs.com/package/langsys-js-react)
+[![license](https://img.shields.io/npm/l/langsys-js-react.svg?style=flat)](./LICENSE)
+
 Langsys revolutionizes localization for apps with easy to integrate, realtime, continuous translations. Read more about Langsys Translation Manager [at the website](https://Langsys.dev/).
 
 Integrate the Langsys Translation Manager into your React, Next.js, Remix, or Vite applications using this SDK.
@@ -7,12 +16,6 @@ Integrate the Langsys Translation Manager into your React, Next.js, Remix, or Vi
 ## Requirements
 
 - **React 18 or 19** (the reactive layer is built on `useSyncExternalStore`).
-
-[![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-react.svg?style=flat)]()
-[![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-react.svg?style=flat)]()
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/langsys/langsys-js-react.svg?style=flat)]()
-[![PR's Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](http://makeapullrequest.com)
-[![NPM License](https://img.shields.io/npm/l/all-contributors.svg?style=flat)](https://github.com/langsys/langsys-js-react/blob/main/LICENSE)
 
 ## How it's layered
 
