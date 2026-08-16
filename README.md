@@ -174,7 +174,11 @@ function Article() {
 ```
 
 The component:
-- Recursively tokenizes text nodes and translatable attributes (`placeholder`, `alt`, `title`, `aria-label`, plus button/input `value` attributes and `<option>` text).
+- Recursively tokenizes text nodes, `<option>` text, and translatable attributes — 15 of them, not just the visible ones:
+    - **Visible text:** `placeholder`, `alt`, `title`, `label`
+    - **Screen-reader text:** `aria-label`, `aria-placeholder`, `aria-description`, `aria-valuetext`, `aria-roledescription` — worth knowing these are covered, since untranslated ARIA strings are invisible on the page and only surface to someone using a screen reader
+    - **Validation messages:** `data-error`, `data-error-message`, `data-validation-message`, `data-invalid-message`, `data-required-message`, `data-pattern-message`
+- Translates the `value` attribute **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` is deliberately *not* in the SDK's `TRANSLATABLE_ATTRIBUTES`; it's gated by `VALUE_TRANSLATABLE_ELEMENTS` / `VALUE_TRANSLATABLE_INPUT_TYPES`.
 - Captures semantic CSS so translators see the styled appearance in the Translation Manager.
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
 - Auto re-translates on locale change.

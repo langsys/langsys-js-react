@@ -1,3 +1,13 @@
+## 0.6.5 - 2026-08-16
+
+### Fixed (documentation)
+
+- **`<Translate>`'s attribute-harvesting docs were wrong in two ways.** No behavior change — the SDK always did the right thing; the README under-described it. Verified against the published `langsys-js-typescript@0.6.4` bundle.
+    - **The attribute list named 4 of the 15 harvested.** Missing were `label`, four more ARIA strings (`aria-placeholder`, `aria-description`, `aria-valuetext`, `aria-roledescription`), and six `data-*` validation messages. The ARIA omissions mattered most: those strings are invisible on the page, so nobody notices they *are* translated — or would notice if they weren't.
+    - **"button/input `value`" over-promised.** `value` is translated on `<button>` and on `<input type="submit">` / `<input type="button">` — and no other input type. The exclusion is deliberate: `value` is translated where it's a *label* and left alone where it's *data*, so a text field's value is never rewritten. The old wording implied the SDK would mangle what a user typed.
+
+  The line was inherited from a shared ancestor by all three framework bindings; Svelte and Vue fixed theirs before publishing, and the Vue agent flagged that this package had shipped it.
+
 ## 0.6.4 - 2026-08-16
 
 ### Fixed
