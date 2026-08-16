@@ -1,3 +1,20 @@
+## 0.6.4 - 2026-08-16
+
+### Fixed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.4` — fixes raw ICU message source rendering to the page.** Unlike the recent bumps, this one changes what your users see. When an ICU argument was missing, the base SDK fell back to the simple `{key}` interpolator, whose pattern deliberately can't match an ICU slot — so the entire construct passed through untouched:
+
+  ```
+  before: {name_gender, select, male {Bienvenido} female {Bienvenida} other {Bienvenide}} Sarah
+  after:  Bienvenide Sarah
+  ```
+
+  **This is reachable without any mistake on your part**, which is why it's worth upgrading for: langsys-ai's ICU promoter can *introduce* a `select` argument the source phrase never had — a plain `%name%` / `{name}` becomes `{name_gender, select, …}` in gendered target locales. Your app can't supply `name_gender`, because it doesn't exist in the phrase you wrote and nothing tells you the translation grew one. Any React app translating into a gendered locale could hit this, through either `t()` or `<Translate params>` / `<Phrase params>`.
+
+  Recovery is aligned with `langsys-php` so a shared catalog can't render two different sentences: a missing `select` argument takes the `other` branch (a correct sentence — `other` is what an unknown gender should render), and a missing `plural` argument takes `other` with `#` rendered as `{count}` (nothing can be inferred for a count, so the sentence survives with a visible gap).
+
+- **A `null` param now counts as missing rather than coercing to `0`.** Previously `{count, plural, …}` with `count: null` rendered `0 items` — identical to a genuine `count: 0`, so a failure to pass the value and an empty cart produced the same string on screen, in screenshots, and in bug reports. A real `0` still renders `0 items`; only `null` now takes the recovery path.
+
 ## 0.6.3 - 2026-08-16
 
 ### Changed
