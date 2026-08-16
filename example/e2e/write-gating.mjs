@@ -62,9 +62,12 @@ function envFileValue(key) {
         } catch {
             continue;
         }
+        // Naive line-prefix match — adequate for this repo's .env format. It does
+        // tolerate a leading `export `, but does not strip inline comments, since
+        // `#` is legal inside a value and guessing would be worse than not.
         const line = text
             .split('\n')
-            .map((l) => l.trim())
+            .map((l) => l.trim().replace(/^export\s+/, ''))
             .find((l) => l.startsWith(`${key}=`));
         if (line) return line.slice(key.length + 1).trim().replace(/^["']|["']$/g, '');
     }
@@ -433,9 +436,11 @@ async function main() {
         // browser cannot forge it: driving this lane through the page produced
         // write_enabled=true (the server correctly seeing loopback) while the
         // header appeared present in Playwright's own request record. It used to
-        // pass only because CORS did not yet allow `x-forwarded-for`, so the
-        // request was blocked outright and the lane never reached the server —
-        // a check that passed for the wrong reason.
+        // pass only because the CORS preflight failed on the ORIGIN — the local
+        // allow-list didn't yet include the port Vite had picked — so the request
+        // was blocked outright and never reached the server. (Not the header:
+        // `allowed_headers` has always been `['*']`, which echoes whatever is
+        // requested.) Either way it was a check asserting on a blocked request.
         //
         // That Chromium refuses to send it is the correct security behaviour, so
         // the right move is to prove the server's IP gate where the header can
