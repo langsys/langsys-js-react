@@ -1,3 +1,14 @@
+## 0.6.3 - 2026-08-16
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.3`** — fixes `<select>` option text being harvested twice by the tokenizer. Inherited; no wrapper API change.
+
+  **What this means if you put a `<select>` inside `<Translate>`** (which this README documents as a supported pattern — `<option>` text is harvested):
+    - **Content without a `<select>` is unaffected** and does not rebase.
+    - **Affected blocks re-key**, because the token list feeds the `custom_id`. Migration is automatic and lookup-only: the base SDK tries the corrected id, then the 0.6.0–0.6.2 id, then the pre-0.6.0 legacy id, and always *registers* the corrected one — so the older keys only shrink and nothing loses its translations.
+    - **If you render with `langsys-php` and hydrate with this SDK**, affected blocks may appear to *gain* translations after upgrading. That's expected: the ids previously diverged from PHP's and now converge on them, so blocks PHP had already translated start resolving here.
+
 ## 0.6.2 - 2026-08-16
 
 ### Changed
