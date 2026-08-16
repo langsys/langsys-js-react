@@ -1,3 +1,13 @@
+## 0.6.2 - 2026-08-16
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript@^0.6.2`** — cross-SDK exclusion fixes, inherited with no wrapper API change. `data-notrans` (langsys-php's author-facing alias for `translate="no"`) is now honored, so on SSR handoff content an author marked do-not-translate isn't harvested by whichever SDK walks the DOM first; `translate="no"` is matched case-insensitively; and phrase-marker values are trimmed to match a normalization on the PHP side.
+
+### Fixed (documentation)
+
+- **`<DontTranslate>` docs corrected.** The 0.2.0 entry claimed `translate="no"` and `data-ls-dont-translate` were "both already honored by the base SDK" — only the first is. Checked against every published base version from 0.1.0 through 0.6.2: `data-ls-dont-translate` appears nowhere in the SDK runtime and never has. **No behavior change and nothing to do** — the component always worked, because exclusion rests on `translate="no"`, which is honored (now case-insensitively). `data-ls-dont-translate` is a wrapper-level styling/debugging hook; it keeps being emitted so existing CSS selectors don't break, and is now documented as such in the component.
+
 ## 0.6.1 - 2026-08-15
 
 ### Changed
@@ -96,6 +106,7 @@
 
 - **`<Phrase>`** — React component wrapping the base SDK's vanilla `Phrase` rich-text handler. Keeps a markup-bearing run as ONE translatable phrase (so a count variable stays next to the noun it pluralizes), encoding inline markup as neutral tokens and reconstituting the real framework-owned elements at render. Props: `category?`, `params?`, `tag?` (default `span`), `className?`, `children`. Brings the React SDK to parity with `langsys-js-svelte`.
 - **`<DontTranslate>`** — marks a region as never-translated (renders `translate="no"` + `data-ls-dont-translate`, both already honored by the base SDK tokenizer/renderer), preserved verbatim. Props: `tag?` (default `span`), `className?`, `children`.
+    > **Correction (2026-08-16):** "both already honored" was wrong — only `translate="no"` is honored by the base SDK, and `data-ls-dont-translate` never was, in any version. The component has always worked, because `translate="no"` carries it. See the 0.6.2 entry.
 
 ## 0.1.0 - 2026-06-11
 
