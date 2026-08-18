@@ -142,6 +142,34 @@ fi
 # dangerous direction. Do not move a check above this line.
 git fetch > /dev/null 2>&1
 
+# Refuse to publish when origin/main has commits we do not have.
+#
+# LOAD-BEARING — do NOT delete this as "redundant, we already use
+# --force-with-lease". That reasoning is exactly what reintroduces the bug.
+# The lease compares the remote against our REMOTE-TRACKING ref, and the
+# `git fetch` above just refreshed precisely that ref — so a colleague's
+# pushed commit is already "expected" by the time the lease is evaluated,
+# and --force-with-lease authorises the overwrite it is named for
+# (reproduced elsewhere in the family: forced update, exit status 0, no
+# warning). More than one account has push access to this repo, so this is
+# reachable rather than theoretical.
+#
+# Placed BEFORE ORIGINAL_VERSION is assigned, so handle_error aborts with
+# nothing to roll back; fired later it would leave a bumped package.json
+# and a stamped CHANGELOG and prompt for an unnecessary rollback.
+#
+# Runs BEFORE the unpushed-commits check for diagnostic reasons. Both orders
+# are equally safe (the fetch is above both, so neither reads a stale ref,
+# and every dangerous state aborts either way) but they differ in the
+# ahead=0/behind=1 state: checking unpushed first reports "No unpushed
+# commits found. Please make your changes and commit them", which sends the
+# operator to commit work they do not have and invites a junk commit to
+# satisfy it. This order names the real condition and the fix instead.
+BEHIND_COMMITS=$(git rev-list HEAD..origin/main --count)
+if [ "$BEHIND_COMMITS" != "0" ]; then
+    handle_error "origin/main has $BEHIND_COMMITS commit(s) you do not have. Publishing would force-push over them. Rebase first: git pull --rebase origin main"
+fi
+
 # Check for unpushed commits.
 #
 # LOAD-BEARING that this runs AFTER the fetch. Against a stale ref this
@@ -163,26 +191,6 @@ if [ "$UNPUSHED_COMMITS" = "0" ]; then
     handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
 fi
 log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
-
-# Refuse to publish when origin/main has commits we do not have.
-#
-# LOAD-BEARING — do NOT delete this as "redundant, we already use
-# --force-with-lease". That reasoning is exactly what reintroduces the bug.
-# The lease compares the remote against our REMOTE-TRACKING ref, and the
-# `git fetch` above just refreshed precisely that ref — so a colleague's
-# pushed commit is already "expected" by the time the lease is evaluated,
-# and --force-with-lease authorises the overwrite it is named for
-# (reproduced elsewhere in the family: forced update, exit status 0, no
-# warning). More than one account has push access to this repo, so this is
-# reachable rather than theoretical.
-#
-# Placed BEFORE ORIGINAL_VERSION is assigned, so handle_error aborts with
-# nothing to roll back; fired later it would leave a bumped package.json
-# and a stamped CHANGELOG and prompt for an unnecessary rollback.
-BEHIND_COMMITS=$(git rev-list HEAD..origin/main --count)
-if [ "$BEHIND_COMMITS" != "0" ]; then
-    handle_error "origin/main has $BEHIND_COMMITS commit(s) you do not have. Publishing would force-push over them. Rebase first: git pull --rebase origin main"
-fi
 
 log_success "All prerequisites met"
 
