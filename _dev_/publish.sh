@@ -137,15 +137,32 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
     handle_error "You must be on the main branch to publish. Current branch: $CURRENT_BRANCH"
 fi
 
-# Check for unpushed commits
+# Fetch BEFORE any check below. Every check from here on reads a
+# remote-tracking ref, and a stale ref makes each of them wrong in the
+# dangerous direction. Do not move a check above this line.
+git fetch > /dev/null 2>&1
+
+# Check for unpushed commits.
+#
+# LOAD-BEARING that this runs AFTER the fetch. Against a stale ref this
+# over-reports: if HEAD was already published (pushed from another machine,
+# or by a co-maintainer), a stale ref still counts it as unpushed, the script
+# proceeds, and the divergence guard below cannot catch it because `behind`
+# is legitimately 0 — no colleague, no divergence, nothing anomalous. The
+# script then amends HEAD, which is already on the remote, and force-pushes
+# the rewrite, orphaning any tag or provenance attestation pointing at the
+# original SHA. Reproduced in a sandbox: ahead(stale)=1 proceeds,
+# ahead(fresh)=0 aborts.
+#
+# Aborting here when HEAD is already published is CORRECT, not a regression:
+# this script embeds the version bump by amending HEAD, so amending an
+# already-published commit is exactly the operation that rewrites published
+# history.
 UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
 if [ "$UNPUSHED_COMMITS" = "0" ]; then
     handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
 fi
 log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
-
-# Fetch latest from remote
-git fetch > /dev/null 2>&1
 
 # Refuse to publish when origin/main has commits we do not have.
 #
