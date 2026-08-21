@@ -67,7 +67,6 @@ export function LangsysGate({ children }: { children: ReactNode }) {
             UserLocaleStore: localeStore,
             baseLocale: 'en-US',
             debug: false,
-            ssrTokenStrategy: 'client',
         }).then((res) => {
             if (res.status) setReady(true);
             else setError(res.errors?.join(', ') ?? 'Init failed');
@@ -86,11 +85,15 @@ Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+): lowerc
 
 ### SSR token strategy
 
-`ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
+`ssrTokenStrategy` (default `'client'`) controls when tokens found during a *server* render are registered. It acts on an SDK instance running inside the rendering process, so it does something only if `LangsysApp.init()` has run in that process.
 
-- `'client'` — tokens collected on the server are flushed from the client after hydration. Best for performance.
-- `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
-- `'auto'` — small batches (≤5) sent from server, larger queued for client.
+**In a client-only app like the one above, and in Next.js as documented in [README-SSR.md](./README-SSR.md), it is inert** — `init()` runs in a `useEffect`, which never executes on the server, so there is no instance for the option to act on. See [Discovering server-rendered content](./README-SSR.md#discovering-server-rendered-content) for what that means for content rendered in Server Components, and how `<Translate>` / `<Phrase>` cover it.
+
+The option matters only in genuinely isomorphic deployments — a custom server, or same-process SSR where `init()` runs in the rendering process:
+
+- `'client'` (default) — nothing is registered from the server render; content that also renders on the client is caught there.
+- `'server'` — registered directly from the server render, originating from your server's IP rather than a browser's.
+- `'auto'` — small batches (≤5) from the server, larger ones deferred to the client.
 
 ## Using translations
 
@@ -264,6 +267,57 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 | `createLocaleStore(initial?)` | `(s?: string) => Signal<string>` | Make a user-locale store outside React (module scope). |
 | `t` / `currentlyLoadedLocale` / `sTranslations` | `Signal<…>` | Raw signals for direct subscription outside React. In components, prefer the hooks. |
 | `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to canonical BCP 47 (`'en-us'` → `'en-US'`) — the same normalization the SDK applies internally. |
+| `useWriteEnabled()` | `() => boolean \| undefined` | Whether this session may register content, as decided by the server. See [Write gating](#write-gating) — the `undefined` state is meaningful. |
+| `writeEnabled` | `Signal<boolean \| undefined>` | Raw signal behind `useWriteEnabled()`. Read-only — the server owns this value. |
+
+## Write gating
+
+A write-capable key shipped in public JavaScript is extractable, so **public keys are read-only**. The server decides per session whether that session may register newly-discovered phrases, and the SDK follows that decision — you never compute it client-side, because the same key can be write-enabled from one IP and read-only from another.
+
+When a session is read-only, nothing is lost: the SDK reports the *page URL only* (never phrase content) so Langsys can visit that page from an allow-listed address and register what it finds.
+
+### `useWriteEnabled()`
+
+```tsx
+const writeEnabled = useWriteEnabled(); // boolean | undefined
+```
+
+Three distinct states — **don't collapse them to a boolean**:
+
+| Value | Meaning |
+|---|---|
+| `undefined` | Authorization hasn't landed yet. Not the same as read-only. Also the value throughout SSR, since this is decided in the browser. |
+| `false` | Read-only session. The SDK may report the page URL instead, subject to the key's auto-discovery permission. |
+| `true` | This session registers content directly. |
+
+Defaulting `undefined` to `false` will render a read-only state during every first paint and, under SSR, cause a hydration mismatch.
+
+### Write grants — for login-walled apps
+
+Content behind a login can't be reached by an external visit, so pass a short-lived JWT your backend mints at login. The server then treats the session as write-enabled.
+
+```tsx
+LangsysApp.init({
+    projectid,
+    key,
+    UserLocaleStore: store,
+    // Prefer the function form: grants are short-lived (~5 min) and the SDK
+    // resolves it fresh before each request, so your auth layer decides when to
+    // mint. A static string expires while the app is still mounted.
+    writeGrant: () => auth.getLangsysGrant(),
+});
+```
+
+If the token only exists *after* `init()` — the usual case — supply it when the user logs in:
+
+```tsx
+import { setWriteGrant } from 'langsys-js-react';
+
+await setWriteGrant(token);   // re-authorizes; resolves once the server has answered
+await setWriteGrant(undefined); // clear on logout — session returns to read-only
+```
+
+`setWriteGrant()` re-authorizes rather than merely storing the token, so `useWriteEnabled()` reflects the new decision once it resolves. Misses occurring *after* the grant lands register directly; earlier ones were already reported through the URL-reporting path.
 
 ## Server-Side Rendering (Next.js, Remix)
 

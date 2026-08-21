@@ -1,3 +1,23 @@
+## 0.7.0 - unreleased
+
+> Requires the base SDK release that carries ticket 838, which is **not yet
+> published** — it currently lives on `langsys-js-typescript`'s
+> `feature/838_write_key_gating_reland`. The range here still reads `^0.6.5`, so
+> this section does not describe a releasable state: bump the range to whatever
+> version ships 838 and re-verify against the registry tarball before releasing.
+
+### Added
+
+- **Write gating (ticket 838).** Public keys are read-only; the server decides per session whether it may register content, and read-only sessions report the page URL only (never phrase content) so Langsys can visit and register from an allow-listed address.
+  - **`useWriteEnabled()`** → `boolean | undefined`. Tri-state, and the states are distinct: `undefined` means authorization hasn't landed (and is the value throughout SSR), `false` means read-only, `true` means this session registers directly. Don't collapse it to a boolean or default `undefined` to `false`.
+  - **`setWriteGrant(grant)`** → `Promise<void>`, also on `LangsysApp`. For login-walled apps: supply a short-lived JWT after `init()` and the session is re-authorized with an `X-Write-Grant` header. It re-authorizes rather than only storing the token.
+  - **`writeGrant`** init option, inherited from the base config type. Prefer the function form — grants are short-lived and a static string expires while the app is still mounted.
+  - **`writeEnabled`** raw signal and the **`WriteGrant`** type re-exported.
+- **E2E testbed** (`example/Testbed.tsx` + `example/e2e/write-gating.mjs`, `npm run test:e2e`) — drives a real browser against a live API and asserts on captured request payloads *and* response status.
+
+### Fixed
+
+- **`useWriteEnabled()` hydration safety.** It pins `getServerSnapshot` to `undefined` rather than reusing the live signal getter. React uses that snapshot for the hydration render as well as the server render, so reading the live value there makes a session whose authorization resolved before hydration render markup disagreeing with the server HTML, and React discards the subtree.
 
 ## 0.6.7 - 2026-08-21
 
