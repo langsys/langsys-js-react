@@ -4,6 +4,7 @@
 ### Docs
 
 - `%key%` guidance now names the expensive consequence, not just the mechanism. A bare `{key}` in JSX is evaluated before the SDK's walker runs, so the *value* is captured as part of the phrase and **every distinct value hashes to its own content block** — a `<Translate>` around a live counter mints a catalog entry per tick while rendering correctly in the base locale throughout. Previously documented only as "interpolation silently breaks". Verified against the shipped `tokenizeElement`/`generateCustomId`. README and `<Translate>` JSDoc.
+- Same gap closed in `<Phrase>`'s JSDoc, which reaches a different identity path and needed its own measurement: `<Phrase>` keys on the encoded phrase string from `encodeRichText`, not on a token array, so a substituted value becomes part of the key directly (`"Based on 0 {m0o}reviews{m0c}"` per value, versus a stable `"Based on {n} {m0o}reviews{m0c}"`). Same outcome, different mechanism. JSDoc matters more than usual here — it ships in `dist/` and is what IDE hover renders, so for anyone who never opens the README it *is* the documentation.
 
 ## 0.6.6 - 2026-08-16
 

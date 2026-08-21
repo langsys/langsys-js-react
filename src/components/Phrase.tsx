@@ -9,7 +9,12 @@ import { Phrase as VanillaPhrase, PHRASE_MARKER_ATTR, type ParamPrimitive } from
 export interface PhraseProps {
     /** Category the phrase registers under (disambiguation for translators). */
     category?: string;
-    /** Interpolation params. Write placeholders as `%n%` / `%name%` in the markup (a bare `{n}` in JSX is an expression). */
+    /**
+     * Interpolation params. Write placeholders as `%n%` / `%name%` in the markup.
+     * A bare `{n}` in JSX is an expression React evaluates before the SDK sees the
+     * text, so the *value* lands in the captured phrase and each distinct value
+     * becomes its own phrase to translate. `%n%` yields one stable phrase.
+     */
     params?: Record<string, ParamPrimitive>;
     /** Host element tag. Defaults to `<span>`. */
     tag?: string;
@@ -31,6 +36,15 @@ export interface PhraseProps {
  * Write placeholders as `%n%` (not bare `{n}`): in JSX a literal `{n}` is a JS
  * expression React evaluates before the SDK sees the text. `%n%` passes through
  * as literal text and the SDK normalizes it to canonical `{n}` at capture.
+ *
+ * The cost of getting this wrong is not a broken placeholder, it's catalog
+ * churn. `<Phrase>` keys on the encoded phrase string, so the substituted value
+ * becomes part of the key — a new phrase per distinct value, none reusable,
+ * with the base locale rendering correctly throughout. Measured against the
+ * shipped `encodeRichText`:
+ *
+ *   {n} via JSX        "Based on 0 {m0o}reviews{m0c}"   (and 1, 2, … each new)
+ *   %n% placeholder    "Based on {n} {m0o}reviews{m0c}" (stable for all values)
  *
  * The inline markup never reaches the translator — it's replaced with neutral
  * tokens and the real elements are reconstituted at render (see richtext.ts in
