@@ -28,6 +28,7 @@ log_error() {
 ORIGINAL_VERSION=""
 NEW_VERSION=""
 CHANGES_COMMITTED=false
+RELEASE_AS_NEW_COMMIT=false
 CHANGES_PUSHED=false
 TAG_CREATED=false
 TAG_PUSHED=false
@@ -49,10 +50,10 @@ rollback() {
             rm -f CHANGELOG.md.bak
         fi
 
-        # Reset git if changes were committed (restore original commit before amend)
+        # Reset git if changes were committed. Correct for BOTH strategies:
+        # HEAD@{1} is the pre-amend commit on the amend path, and the
+        # pre-commit HEAD on the new-commit path.
         if [ "$CHANGES_COMMITTED" = true ]; then
-            # Since we amended the commit, we need to restore the original
-            # Using reflog to get back to the commit before the amend
             git reset --hard HEAD@{1} 2>/dev/null || true
 
             # If we pushed the amended commit, we need to force push the original back
@@ -170,27 +171,44 @@ if [ "$BEHIND_COMMITS" != "0" ]; then
     handle_error "origin/main has $BEHIND_COMMITS commit(s) you do not have. Publishing would force-push over them. Rebase first: git pull --rebase origin main"
 fi
 
-# Check for unpushed commits.
+# Decide how to land the version bump: amend HEAD, or add a new commit.
+#
+# The bump cannot be skipped. CI checks out the release tag and runs
+# `npm publish`, which reads package.json — so the TAGGED commit must already
+# carry the new version. Tagging an untouched HEAD publishes the previous
+# version and fails on "you cannot publish over the previously published
+# version".
 #
 # LOAD-BEARING that this runs AFTER the fetch. Against a stale ref this
 # over-reports: if HEAD was already published (pushed from another machine,
-# or by a co-maintainer), a stale ref still counts it as unpushed, the script
-# proceeds, and the divergence guard below cannot catch it because `behind`
-# is legitimately 0 — no colleague, no divergence, nothing anomalous. The
-# script then amends HEAD, which is already on the remote, and force-pushes
-# the rewrite, orphaning any tag or provenance attestation pointing at the
-# original SHA. Reproduced in a sandbox: ahead(stale)=1 proceeds,
-# ahead(fresh)=0 aborts.
+# or by a co-maintainer), a stale ref still counts it as unpushed, we would
+# take the amend path below, and the divergence guard cannot catch it because
+# `behind` is legitimately 0 — no colleague, no divergence, nothing anomalous.
+# Amending an already-published HEAD and force-pushing the rewrite orphans any
+# tag or provenance attestation pointing at the original SHA. Reproduced in a
+# sandbox: ahead(stale)=1 proceeds, ahead(fresh)=0 does not.
 #
-# Aborting here when HEAD is already published is CORRECT, not a regression:
-# this script embeds the version bump by amending HEAD, so amending an
-# already-published commit is exactly the operation that rewrites published
-# history.
+# So the fresh count selects the strategy:
+#
+#   ahead > 0  HEAD is local-only. Amend it — no published history is touched,
+#              and the log stays free of a standalone bump commit.
+#   ahead = 0  HEAD is published. Amending it is exactly the operation that
+#              rewrites published history, so DO NOT. Add the bump as its own
+#              commit and push it normally — no force-push on this path at all.
+#
+# This used to abort outright when ahead=0, on the reasoning that the script
+# "embeds the version bump by amending HEAD". True of the script, but it made
+# an ordinary habit (pushing your work when you finish it) into a trap whose
+# only escape routes were a junk commit or rewinding the remote. The abort was
+# protecting the amend; the amend is what needed to be conditional.
 UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
 if [ "$UNPUSHED_COMMITS" = "0" ]; then
-    handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
+    RELEASE_AS_NEW_COMMIT=true
+    log_info "HEAD is already published — the bump will be a new commit (no force-push)"
+else
+    RELEASE_AS_NEW_COMMIT=false
+    log_success "Found $UNPUSHED_COMMITS unpushed commit(s) — the bump will amend HEAD"
 fi
-log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
 
 log_success "All prerequisites met"
 
@@ -273,24 +291,37 @@ npm install
 log_info "Running build to verify everything compiles..."
 npm run build
 
-# Amend the last commit with version bump
-log_info "Amending last commit with version bump..."
+# Land the version bump, by whichever strategy the guard above selected.
 git add package.json package-lock.json CHANGELOG.md
 
-# Get the current commit message
-LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-AMENDED_MESSAGE="$LAST_COMMIT_MESSAGE
+if [ "$RELEASE_AS_NEW_COMMIT" = true ]; then
+    # HEAD is already on origin/main. Amending it would rewrite published
+    # history; a fresh commit on top does not, and needs no force-push.
+    log_info "Committing version bump as a new commit..."
+    git commit -m "chore: release $NEW_VERSION"
+    CHANGES_COMMITTED=true
+
+    log_info "Pushing to origin..."
+    git push origin main
+    CHANGES_PUSHED=true
+else
+    # HEAD is local-only, so folding the bump into it is safe.
+    log_info "Amending last commit with version bump..."
+    LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+    AMENDED_MESSAGE="$LAST_COMMIT_MESSAGE
 
 [Version bumped to $NEW_VERSION]"
 
-# Amend the commit
-echo "$AMENDED_MESSAGE" | git commit --amend -F -
-CHANGES_COMMITTED=true
+    echo "$AMENDED_MESSAGE" | git commit --amend -F -
+    CHANGES_COMMITTED=true
 
-# Push to origin (with force since we amended)
-log_info "Pushing to origin..."
-git push --force-with-lease origin main
-CHANGES_PUSHED=true
+    # Force needed only because we rewrote a local commit that may share a
+    # SHA prefix with nothing on the remote; --force-with-lease is retained
+    # for the co-maintainer case the divergence guard already screens for.
+    log_info "Pushing to origin..."
+    git push --force-with-lease origin main
+    CHANGES_PUSHED=true
+fi
 
 # Create and push tag
 log_info "Creating and pushing tag..."
