@@ -19,6 +19,13 @@ export interface TranslateProps {
      * `{key}` at capture). Applied to content-block text nodes, translatable
      * attributes, `<option>` text, and single-token content — including
      * untranslated fallbacks. Number/Date values get CLDR locale formatting.
+     *
+     * A bare `{key}` doesn't just break interpolation — JSX evaluates it before
+     * the walker runs, so the *value* is captured as part of the phrase and each
+     * distinct value hashes to its own content block. A `<Translate>` around a
+     * live counter registers a new block per tick while rendering correctly in
+     * the base locale the whole time. `%key%` yields one stable id for all
+     * values.
      */
     params?: Record<string, ParamPrimitive>;
     /** Host element tag. Defaults to a `<translate>` custom element. */

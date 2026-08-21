@@ -1,3 +1,10 @@
+
+## 0.6.7 - unreleased
+
+### Docs
+
+- `%key%` guidance now names the expensive consequence, not just the mechanism. A bare `{key}` in JSX is evaluated before the SDK's walker runs, so the *value* is captured as part of the phrase and **every distinct value hashes to its own content block** — a `<Translate>` around a live counter mints a catalog entry per tick while rendering correctly in the base locale throughout. Previously documented only as "interpolation silently breaks". Verified against the shipped `tokenizeElement`/`generateCustomId`. README and `<Translate>` JSDoc.
+
 ## 0.6.6 - 2026-08-16
 
 ### Changed
