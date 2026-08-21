@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-react",
-    "version": "0.6.6",
+    "version": "0.6.7",
     "description": "React binding for the Langsys translation SDK — realtime continuous translations with automatic token discovery, delivered as hooks and a <Translate> component.",
     "author": "Langsys",
     "license": "MIT",
