@@ -314,13 +314,13 @@ useEffect(() => {
 }, [locale]);
 ```
 
-> **This promise resolves on failure too — it means "the fetch ended", not "the translations arrived".** `translationsLoadingPromise` is the promise returned by the SDK's internal `change()`. On a failed fetch the fetch helper *returns normally instead of throwing* (`dist/index.js:682`, returning before the `sTranslations.set()` at `:695`), so `change()` resolves exactly as it does on success while the catalog still holds the previous locale's data. Your callback then runs against a stale catalog and the page renders fluent content in the wrong language.
+> **This promise resolves on failure too — it means "the fetch ended", not "the translations arrived".** `translationsLoadingPromise` is the promise returned by the SDK's internal `change()`. On a failed fetch the fetch helper *returns normally instead of throwing* (CJS `dist/index.js:682`, returning before the `sTranslations.set()` at `:695`; subtract 2 for the ESM `dist/index.mjs`), so `change()` resolves exactly as it does on success while the catalog still holds the previous locale's data. Your callback then runs against a stale catalog and the page renders fluent content in the wrong language.
 >
-> **Checking the locale alone is not the fix — it hangs.** `currentlyLoadedLocale` is written *only* on the success path (`:696`), so on a failed fetch it never updates and a component gating purely on `useCurrentLocale() === requested` waits forever. There is no rejection and no error callback anywhere.
+> **Checking the locale alone is not the fix — it hangs.** `currentlyLoadedLocale` is written *only* on the success path (CJS `dist/index.js:696`), so on a failed fetch it never updates and a component gating purely on `useCurrentLocale() === requested` waits forever. There is no rejection and no error callback anywhere.
 >
 > Use both edges, because the SDK gives you exactly one of each: the promise is the only **"it ended"** signal, and the locale is the only **"it worked"** signal.
 >
-> **But they are not coherent with each other.** The locale write sits inside a `setTimeout(…, 100)` (`:696`), so on a *successful* fetch there is a ~100ms window where the promise has settled and `useCurrentLocale()` still reports the old locale. An equality check evaluated in that window reads as failure and then flips — so `settled && current !== requested` is **not** a failure test, and writing it as one produces a flapping error state on every successful switch.
+> **But they are not coherent with each other.** The locale write sits inside a `setTimeout(…, 100)` (CJS `dist/index.js:696`), so on a *successful* fetch there is a ~100ms window where the promise has settled and `useCurrentLocale()` still reports the old locale. An equality check evaluated in that window reads as failure and then flips — so `settled && current !== requested` is **not** a failure test, and writing it as one produces a flapping error state on every successful switch.
 >
 > Treat a match as the only positive, and don't try to derive failure from a mismatch:
 >
