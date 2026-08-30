@@ -1,4 +1,12 @@
 
+## 0.6.8 - unreleased
+
+### Docs
+
+- **`translationsLoadingPromise` documented as resolving on failure.** The README said it fires "after the new translations arrive" and showed a `.then()` callback for re-rendering. It resolves on a *failed* fetch too: the base SDK's error branch (`dist/index.js:679-682` at 0.6.5) calls the same internal resolver and returns before `sTranslations.set()`, so a failure settles the promise identically to a success while the catalog still holds the previous locale. Following the old guidance runs your "translations arrived" callback against stale data and renders fluent wrong-language content with nothing reporting a problem.
+- Also documented two timing consequences of the same code path: the promise resolves *before* `currentlyLoadedLocale` is updated (that write is deferred a tick at `:696`, while the resolver runs at `:698`), so reading `useCurrentLocale()` inside `.then()` can still return the previous locale; and a locale whose fetch never succeeds leaves the last successful locale's catalog in `localStorage` indefinitely, because translations are persisted without a locale tag. Guidance is now to gate on `useCurrentLocale()` matching the requested locale rather than on the promise.
+- Same correction applied to the `<LocaleSwitcher>` example in `README-SSR.md`, which awaited the promise before revealing content, and to the `translationsLoadingPromise` getter's JSDoc — that one had none, and JSDoc ships in `dist/` and is what IDE hover renders.
+
 ## 0.6.7 - 2026-08-21
 
 ### Docs

@@ -304,7 +304,7 @@ The matcher tries exact match first (e.g. `en-US`), then language-only (`en` mat
 
 ### Waiting for translations to load
 
-When changing locale mid-session, you may want to re-run dependent code after the new translations arrive:
+When changing locale mid-session, you may want to re-run dependent code once the fetch settles:
 
 ```tsx
 useEffect(() => {
@@ -313,6 +313,12 @@ useEffect(() => {
     });
 }, [locale]);
 ```
+
+> **This promise resolves on failure too — it means "the fetch settled", not "the translations arrived".** In the base SDK the error branch calls the same internal resolver and returns *before* writing the catalog, so a failed fetch resolves exactly like a successful one while `sTranslations` still holds the previous locale's data. Your callback then runs against a stale catalog, and the page renders fluent content in the wrong language with nothing reporting a problem. If that distinction matters, check `useCurrentLocale()` against the locale you asked for rather than trusting the promise.
+>
+> Two related timing notes: the promise also resolves *before* `currentlyLoadedLocale` is updated (the SDK defers that write by a tick), so reading `useCurrentLocale()` immediately in `.then()` can still return the previous locale — read it from a subsequent render instead. And a locale whose fetch never succeeded leaves the persisted catalog from the last successful locale in place indefinitely, since translations are persisted to `localStorage` without a locale tag.
+
+Verified against `langsys-js-typescript@0.6.5`.
 
 ## License
 

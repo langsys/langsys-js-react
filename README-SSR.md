@@ -164,7 +164,7 @@ export function LocaleSwitcher() {
 
     function changeLocale(next: string) {
         setLocale(next); // subscribers in the SDK trigger a fetch
-        return LangsysApp.translationsLoadingPromise; // optional: await the in-flight fetch
+        return LangsysApp.translationsLoadingPromise; // optional: settles when the fetch ends (success OR failure)
     }
 
     return (
@@ -176,6 +176,8 @@ export function LocaleSwitcher() {
     );
 }
 ```
+
+> `translationsLoadingPromise` resolves on a **failed** fetch as well as a successful one, and it resolves before `currentlyLoadedLocale` updates — so don't treat it as "the new language is ready". A switcher that awaits it and then reveals content can reveal the *previous* locale's text. Gate on `useCurrentLocale()` matching the locale you requested instead. (Verified against `langsys-js-typescript@0.6.5`.)
 
 > Keep one locale store for the app (created where you call `init`) and thread `setLocale` down via context or props, rather than calling `useLocaleStore` with a fresh initial value in unrelated trees.
 

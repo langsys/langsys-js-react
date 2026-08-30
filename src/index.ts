@@ -115,6 +115,16 @@ class LangsysAppReact {
         return _LangsysApp.Translations;
     }
 
+    /**
+     * Settles when the in-flight translation fetch **ends** — not when it succeeds.
+     *
+     * The base SDK's error branch resolves the same internal promise and returns
+     * before writing the catalog, so a failed fetch is indistinguishable from a
+     * successful one here while `sTranslations` still holds the previous locale's
+     * data. It also resolves before `currentlyLoadedLocale` is updated. Treat it as
+     * "the request finished"; to know the new language is actually live, compare
+     * `useCurrentLocale()` against the locale you requested.
+     */
     public get translationsLoadingPromise() {
         return _LangsysApp.translationsLoadingPromise;
     }
