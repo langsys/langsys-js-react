@@ -320,20 +320,16 @@ useEffect(() => {
 >
 > Use both edges, because the SDK gives you exactly one of each: the promise is the only **"it ended"** signal, and the locale is the only **"it worked"** signal.
 >
-> ```tsx
-> useEffect(() => {
->     let cancelled = false;
->     LangsysApp.translationsLoadingPromise.then(() => {
->         // The locale write is deferred by 100ms (setTimeout at :696), so don't
->         // read it synchronously here — let a later render observe it.
->         if (!cancelled) setSettled(true);
->     });
->     return () => { cancelled = true; };
-> }, [locale]);
+> **But they are not coherent with each other.** The locale write sits inside a `setTimeout(…, 100)` (`:696`), so on a *successful* fetch there is a ~100ms window where the promise has settled and `useCurrentLocale()` still reports the old locale. An equality check evaluated in that window reads as failure and then flips — so `settled && current !== requested` is **not** a failure test, and writing it as one produces a flapping error state on every successful switch.
 >
-> // In render: settled && currentLocale === locale  -> loaded
-> //            settled && currentLocale !== locale  -> the fetch failed
+> Treat a match as the only positive, and don't try to derive failure from a mismatch:
+>
+> ```tsx
+> // loaded  ->  settled && currentLocale === locale
+> // not yet ->  anything else
 > ```
+>
+> **There is no reliable failure signal.** A failed fetch and a fetch that succeeded 50ms ago are indistinguishable from outside: neither has updated the locale, and the promise has resolved in both cases. If you need to show an error state, you need your own timeout — the SDK exposes no edge that separates them.
 >
 > A locale whose fetch fails leaves the last successful locale's catalog in `localStorage` — it is persisted with no locale tag, so nothing can detect that it is stale. It stays until something triggers another fetch: a page reload, `LangsysApp.refresh()`, or switching to a *different* locale. Re-selecting the same failed locale does **not** retry (the signal ignores a set to an identical value).
 >

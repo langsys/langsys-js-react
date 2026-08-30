@@ -129,8 +129,13 @@ class LangsysAppReact {
      * therefore waits forever.
      *
      * Use both: await this as the "it ended" edge, then compare `useCurrentLocale()`
-     * to the requested locale from a later render as the "it worked" edge. A
-     * mismatch after it settles is the only failure signal the SDK exposes.
+     * to the requested locale from a later render as the "it worked" edge.
+     *
+     * Treat a match as the only positive. A mismatch is NOT a failure test — the
+     * locale write is deferred 100ms behind this promise, so on a successful fetch
+     * there is a window where this has settled and the locale still reads the old
+     * value. A failed fetch and one that succeeded 50ms ago look identical from
+     * outside; if you need an error state, use your own timeout.
      */
     public get translationsLoadingPromise() {
         return _LangsysApp.translationsLoadingPromise;

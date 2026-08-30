@@ -179,7 +179,7 @@ export function LocaleSwitcher() {
 
 > `translationsLoadingPromise` resolves on a **failed** fetch as well as a successful one, and it resolves ~100ms before `currentlyLoadedLocale` updates — so don't treat it as "the new language is ready". A switcher that awaits it and then reveals content can reveal the *previous* locale's text.
 >
-> Don't swap it for a locale check either: `currentlyLoadedLocale` is written only on the success path, so a switcher gating purely on `useCurrentLocale() === requested` never reveals anything at all when a fetch fails. Await the promise as the "it ended" signal, then compare the locale in a **later render** as the "it worked" signal — a mismatch once it has settled is your failure case, and the only one you get. (Verified against `langsys-js-typescript@0.6.5`.)
+> Don't swap it for a locale check either: `currentlyLoadedLocale` is written only on the success path, so a switcher gating purely on `useCurrentLocale() === requested` never reveals anything at all when a fetch fails. Await the promise as the "it ended" signal, then compare the locale in a **later render** as the "it worked" signal. Treat only a *match* as positive: the locale write is deferred 100ms behind the promise, so a mismatch right after it settles is the normal success path mid-flight, not a failure. There is no signal that separates a failed fetch from one that just succeeded — use your own timeout if you need an error state. (Verified against `langsys-js-typescript@0.6.5`.)
 
 > Keep one locale store for the app (created where you call `init`) and thread `setLocale` down via context or props, rather than calling `useLocaleStore` with a fresh initial value in unrelated trees.
 
