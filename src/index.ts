@@ -118,12 +118,19 @@ class LangsysAppReact {
     /**
      * Settles when the in-flight translation fetch **ends** — not when it succeeds.
      *
-     * The base SDK's error branch resolves the same internal promise and returns
-     * before writing the catalog, so a failed fetch is indistinguishable from a
-     * successful one here while `sTranslations` still holds the previous locale's
-     * data. It also resolves before `currentlyLoadedLocale` is updated. Treat it as
-     * "the request finished"; to know the new language is actually live, compare
-     * `useCurrentLocale()` against the locale you requested.
+     * This is the base SDK's internal `change()` promise. On a failed fetch the
+     * fetch helper returns normally rather than throwing, so it resolves exactly
+     * as it does on success while `sTranslations` still holds the *previous*
+     * locale's catalog. It never rejects.
+     *
+     * It also resolves ~100ms before `currentlyLoadedLocale` is written, and that
+     * write happens only on the success path — so `useCurrentLocale()` never
+     * catches up after a failure. Gating solely on `useCurrentLocale() === requested`
+     * therefore waits forever.
+     *
+     * Use both: await this as the "it ended" edge, then compare `useCurrentLocale()`
+     * to the requested locale from a later render as the "it worked" edge. A
+     * mismatch after it settles is the only failure signal the SDK exposes.
      */
     public get translationsLoadingPromise() {
         return _LangsysApp.translationsLoadingPromise;

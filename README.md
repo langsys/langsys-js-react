@@ -314,9 +314,30 @@ useEffect(() => {
 }, [locale]);
 ```
 
-> **This promise resolves on failure too — it means "the fetch settled", not "the translations arrived".** In the base SDK the error branch calls the same internal resolver and returns *before* writing the catalog, so a failed fetch resolves exactly like a successful one while `sTranslations` still holds the previous locale's data. Your callback then runs against a stale catalog, and the page renders fluent content in the wrong language with nothing reporting a problem. If that distinction matters, check `useCurrentLocale()` against the locale you asked for rather than trusting the promise.
+> **This promise resolves on failure too — it means "the fetch ended", not "the translations arrived".** `translationsLoadingPromise` is the promise returned by the SDK's internal `change()`. On a failed fetch the fetch helper *returns normally instead of throwing* (`dist/index.js:682`, returning before the `sTranslations.set()` at `:695`), so `change()` resolves exactly as it does on success while the catalog still holds the previous locale's data. Your callback then runs against a stale catalog and the page renders fluent content in the wrong language.
 >
-> Two related timing notes: the promise also resolves *before* `currentlyLoadedLocale` is updated (the SDK defers that write by a tick), so reading `useCurrentLocale()` immediately in `.then()` can still return the previous locale — read it from a subsequent render instead. And a locale whose fetch never succeeded leaves the persisted catalog from the last successful locale in place indefinitely, since translations are persisted to `localStorage` without a locale tag.
+> **Checking the locale alone is not the fix — it hangs.** `currentlyLoadedLocale` is written *only* on the success path (`:696`), so on a failed fetch it never updates and a component gating purely on `useCurrentLocale() === requested` waits forever. There is no rejection and no error callback anywhere.
+>
+> Use both edges, because the SDK gives you exactly one of each: the promise is the only **"it ended"** signal, and the locale is the only **"it worked"** signal.
+>
+> ```tsx
+> useEffect(() => {
+>     let cancelled = false;
+>     LangsysApp.translationsLoadingPromise.then(() => {
+>         // The locale write is deferred by 100ms (setTimeout at :696), so don't
+>         // read it synchronously here — let a later render observe it.
+>         if (!cancelled) setSettled(true);
+>     });
+>     return () => { cancelled = true; };
+> }, [locale]);
+>
+> // In render: settled && currentLocale === locale  -> loaded
+> //            settled && currentLocale !== locale  -> the fetch failed
+> ```
+>
+> A locale whose fetch fails leaves the last successful locale's catalog in `localStorage` — it is persisted with no locale tag, so nothing can detect that it is stale. It stays until something triggers another fetch: a page reload, `LangsysApp.refresh()`, or switching to a *different* locale. Re-selecting the same failed locale does **not** retry (the signal ignores a set to an identical value).
+>
+> The failure is not entirely silent — the SDK logs to the console — but there is nothing your code can observe.
 
 Verified against `langsys-js-typescript@0.6.5`.
 
