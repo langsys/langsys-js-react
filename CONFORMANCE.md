@@ -10,7 +10,7 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Repo state | branch `feature/838_write_gating_reland` |
 | Suite | **33 tests / 8 files**, all passing (includes a 3-test upstream precondition and a 4-test surface-absence pin) |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
-| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `e0c2d7b` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5` |
+| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `82678b6` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
 | Rules applicable | **66 of 67** — only [HINT-2](#hint-2) is excluded (`profile: server`) |
 | Graded rows | **21** — computed from this file's tables, not hand-counted |
@@ -152,6 +152,24 @@ peer dependency and the raw signal can be imported from the core directly; this
 binding declines to bless that path under its own name. Nothing had published,
 so the removal cost no consumer.
 
+**Provenance — this file cited the wrong core SHA on first publication.** The
+header read `e0c2d7b`, which is the rebase-era commit this repo verified during
+an earlier lane. The symlink had since moved to `82678b6`, so the citation was a
+value quoted from prior notes rather than resolved from the artifact at write
+time. The *measurements* were always against the real linked core and are
+unaffected; only the provenance line was wrong — the documented-claim-versus-
+measured-fact class landing in the one field whose entire job is provenance.
+
+Corrected by resolving the link rather than re-reading notes:
+
+```bash
+cd node_modules/langsys-js-typescript && git rev-parse HEAD
+```
+
+Caught by the reviewer resolving the link independently. A second lane carried
+the identical stale SHA, which is what makes it a class rather than a typo:
+both repos quoted the same superseded value from their own documentation.
+
 ## Spec defect found
 
 **The SSR family's profile is stated two ways.** The family summary table
@@ -190,7 +208,7 @@ Controls, current run: `PHRASE_MARKER_ATTR` → **2**, `useSyncExternalStore` �
    not part of the unit suite and depends on a running API. Raising the ceiling
    means making that run reproducible in CI, which it currently is not.
 2. **The core is consumed via a symlink, not the published tarball.** So this
-   file certifies the binding against `e0c2d7b`, not against anything a consumer
+   file certifies the binding against `82678b6`, not against anything a consumer
    can install. `src/upstream-precondition.test.ts` makes the substitution
    visible rather than silent, but cannot make it equivalent — a symlinked
    `dist/` bypasses the `files` allowlist, the `exports` map and publint.
