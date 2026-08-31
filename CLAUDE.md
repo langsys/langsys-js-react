@@ -123,6 +123,13 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - npm trusted publisher config: Environment name `npm-publish`, workflow filename `publish.yml`
 - `.github/workflows/publish.yml`: `environment: npm-publish`
 
+## Commit conventions
+
+**Never add trailers to commit messages.** No `Co-Authored-By`, no
+`Generated with`, no tool attribution of any kind. The repository owner is the
+sole author of record, and a trailer naming anything else is wrong on the face
+of it. This applies to every commit in this repo without exception.
+
 ## When making changes
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.

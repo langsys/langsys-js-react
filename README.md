@@ -355,7 +355,7 @@ const supportedLocales = (await LangsysApp.getLocalesFlat()).map((l) => l.code);
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'), supportedLocales);
 ```
 
-The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and is script-aware via CLDR likely-subtags (base SDK 0.3.0+): `zh-TW` matches `zh-Hant` and never falls back to `zh-Hans`. Results are always canonical BCP 47; it returns `false` if no match.
+The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and is script-aware via CLDR likely-subtags (base SDK 0.3.0+): `zh-TW` matches `zh-Hant` and never falls back to `zh-Hans`. Results are returned in the SDK's canonical form, which is **lowercase** (`en-us`, `zh-hant`) — see the note under [Initialization](#initialization); it returns `false` if no match.
 
 ### Waiting for translations to load
 

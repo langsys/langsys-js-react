@@ -8,13 +8,13 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Spec text read | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a` |
 | Read at | 2026-08-31T20:59:40Z |
 | Repo state | branch `feature/838_write_gating_reland` |
-| Suite | **33 tests / 8 files**, all passing (includes a 3-test upstream precondition and a 4-test surface-absence pin) |
+| Suite | **34 tests / 8 files**, all passing (includes a 3-test upstream precondition and a 4-test surface-absence pin) |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
 | Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `82678b6` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
 | Rules applicable | **66 of 67** — only [HINT-2](#hint-2) is excluded (`profile: server`) |
 | Graded rows | **21** — computed from this file's tables, not hand-counted |
-| Grade summary | `provisional` 10 · `delegated` 9 · `n/a (architecture)` 1 · `n/a (profile)` 1 · `implemented` 0 · `partial` 0 · `open` 0 |
+| Grade summary | `provisional` 9 · `delegated` 9 · `partial` 1 · `n/a (architecture)` 1 · `n/a (profile: server)` 1 · `implemented` 0 · `open` 0 |
 
 > **Nothing here is graded `implemented`, and that is correct.** CONF-2 caps a
 > suite whose evidence is `mock` at `provisional`. This suite is jsdom with the
@@ -66,7 +66,7 @@ the code path. Collapsing them hides which of the two is watching.
 | BIND-2 — never branch on server-computed capability | `provisional` | Probe `key_type\|keyType` over `src/` → **0** (control: `useSyncExternalStore` → 4). `useWriteEnabled` returns the server's tri-state undefaulted; `src/useWriteEnabled.test.tsx` asserts `undefined`, `false` and `true` render as three distinct branches. |
 | BIND-3 — no network behaviour of its own | `provisional` | Probes over `src/`: `fetch(\|XMLHttpRequest\|axios` → **0**; `setTimeout\|setInterval\|queueMicrotask` → **0**; `sessionStorage\|localStorage` → **0**. Controls non-zero (see [Probes](#probes)). |
 | BIND-4 — no config the core does not define | `provisional` | `iLangsysInitConfig` is `Omit<iVanillaInitConfig, 'UserLocaleStore'> & { UserLocaleStore: Signal<string> }` (`src/index.ts`). The single divergence narrows an existing key's type; it adds none. `writeGrant` is inherited, not declared here. |
-| BIND-5 — no caching of lookups; presence must survive any cache | `provisional` | Probe `useMemo\|useCallback\|React.memo\|memo(` over `src/` **and** `example/` → **0**. There is no cache, so the absent≠present-but-null distinction cannot be lost here. Re-entry measured, not assumed — see [Route re-entry](#route-re-entry-measurement). |
+| BIND-5 — no caching of lookups; presence must survive any cache | `partial` | Cache half: `provisional`. Probe `useMemo\|useCallback\|React.memo\|memo(` over `src/` **and** `example/` → **0**; no cache exists, so absent≠present-but-null cannot be lost here. **Re-entry half: a finding, see [Route re-entry](#route-re-entry-measurement).** A stable-element layout does not re-enter `t()` on navigation, which is the persistent-layout discovery gap; not fixable in this binding. |
 | BIND-6 — wrap the narrowest surface | `provisional` | `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export, with two positive controls. Reasoning at the export site, `src/index.ts:49-65`. |
 
 ## 2 — Rules this binding could interfere with
@@ -105,16 +105,42 @@ BIND-5's hazard is that a memo keyed on `t` suppresses discovery on a new URL,
 because the core re-records discovery **per URL** before its own dedup while
 `TFunction` identity does **not** change on a route change.
 
-Measured rather than reasoned (`src/route-reentry.test.tsx`):
+No memo layer exists here (`src/` + `example/`, comment-stripped → 0), so the
+question is React's own re-render semantics. **They differ by shape, and only
+one shape is favourable** (`src/route-reentry.test.tsx`, 3 tests):
 
-- **2 of 2** components re-enter `t()` on a client-side route change — including
-  a persistent layout that never unmounts.
-- `TFunction` identity **is** stable across that change, asserted directly. So
-  the hazard is real; this binding avoids it by having no memo layer at all
-  rather than by keying one correctly.
+| Layout shape | Re-enters `t()` on route change? | Measured |
+|---|---|---|
+| Element **recreated** each render (`createElement(Layout)` inside the parent) | yes | layout 2 of 2 |
+| Element held as a **stable reference** (module-level, or `children` pass-through) | **no** | layout **0**, page 1 |
 
-Both halves are pinned. Adding a memo anywhere above those components turns the
-first red; the second documents why that would matter.
+`TFunction` identity is stable across the change, asserted directly — so the
+memo hazard is real *and* React adds a second path to the same outcome that
+needs no memo at all.
+
+**The stable-element result is a finding, not a pass.** React bails out on an
+identical element reference before the component body runs, so phrases rendered
+only by a persistent layout are never re-offered on the new URL and the new URL
+is never credited with them. That is the persistent-layout discovery gap, and
+this is the shape real routers and `children`-pass-through layouts produce —
+which makes it the common case, not the corner.
+
+It is **not fixable inside this binding**: there is no memo to correct, and
+forcing a re-render would mean overriding React's own bail-out — this binding
+implementing behaviour rather than delegating it, which BIND-1 forbids. Routed
+core-side, where a per-URL re-offer that does not depend on re-render would
+close it for every framework at once. React is the fourth binding to confirm it.
+
+Both shapes are pinned. If React's bail-out changes, or the core grows a
+re-offer path, the adverse row goes red and the finding is stale.
+
+**Correction:** an earlier revision of this file recorded "2 of 2 components
+re-enter, persistent layout included" and generalised it to persistent layouts
+in general. The test it cited built its layout element *inside* the parent's
+render, so it measured the recreated shape while its comment claimed the stable
+one — the favourable answer to a question the code did not ask. Caught in
+review; the adverse shape is now measured and recorded, per the rule that an
+adverse answer is worth more recorded than avoided.
 
 ## Mutation evidence
 
@@ -137,8 +163,17 @@ repo documented the reverse and instructed consumers to compare against
 `'en-US'` — a comparison that can never match, so anyone following the README
 wrote a locale check that silently never fired. Corrected at `README.md` (×2),
 `CLAUDE.md`, `src/adapters.ts` and `src/index.test.ts`, against measured output.
-Stale-phrase sweep: `grep -F "'en-us' → 'en-US'"` → expected 0, actual **0**;
-`grep -F "canonical form (\`'en-US'\`)"` → expected 0, actual **0**.
+Stale-phrase sweep, scoped to exclude this file — which quotes both needles in
+order to document them, and so self-matches if swept naively:
+
+```bash
+grep -rF "'en-us' → 'en-US'" --exclude=CONFORMANCE.md .   # expected 0, actual 0
+grep -rF "canonical form (\`'en-US'\`)" --exclude=CONFORMANCE.md .   # expected 0, actual 0
+```
+
+The unscoped form returns 1 for the second needle, from the sentence above. An
+earlier revision recorded "actual 0" without the exclusion, which was not
+reproducible as written.
 
 This is the third sighting of that class across the fleet (fixture, docstring,
 now full docs surface), each in a different medium.

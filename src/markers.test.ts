@@ -24,14 +24,19 @@ describe('marker attributes are sourced from the core', () => {
 
     it('<Phrase> renders the core\'s current marker, whatever it is', () => {
         const html = renderToStaticMarkup(createElement(Phrase, null, 'x'));
-        expect(html).toContain(PHRASE_MARKER_ATTR);
+        // Boundary-anchored, not a substring test: a hardcoded superstring like
+        // `data-ls-phrase-v2` contains the real marker and would satisfy
+        // `toContain` while the core's tokenizer ignored it entirely.
+        expect(html).toMatch(new RegExp(`(?:^|\\s)${PHRASE_MARKER_ATTR}(?=[=\\s>])`));
     });
 
     it('the rendered marker is one the core\'s tokenizer accepts', () => {
         // The core accepts an alias list; ours must be a member, not merely
         // equal to the primary name.
         const html = renderToStaticMarkup(createElement(Phrase, null, 'x'));
-        expect(PHRASE_MARKER_ATTRS.some((attr) => html.includes(attr))).toBe(true);
+        expect(
+            PHRASE_MARKER_ATTRS.some((attr) => new RegExp(`(?:^|\\s)${attr}(?=[=\\s>])`).test(html)),
+        ).toBe(true);
     });
 
     it('<DontTranslate> uses the standard HTML attribute, which is not a core constant', () => {
