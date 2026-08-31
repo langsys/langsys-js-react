@@ -81,7 +81,7 @@ export function LangsysGate({ children }: { children: ReactNode }) {
 
 `UserLocaleStore` is a `Signal<string>` — switch it with `setLocale(...)` (from the same `useLocaleStore` call) or `localeStore.set('fr-FR')`, and the SDK reacts. If you'd rather keep the locale store at module scope, `const localeStore = createLocaleStore('en-US')` works too.
 
-Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+): lowercase input like `'en-us'` still works, but `useCurrentLocale()` and `detectPreferredLocale()` always return the canonical form (`'en-US'`) — compare against that, or normalize your own values with the re-exported `canonicalizeLocale()`.
+Locale identifiers are canonicalized by the base SDK: `'en-US'`, `'EN-US'` and `'en-us'` all normalize to **lowercase** `'en-us'`. `useCurrentLocale()` and `detectPreferredLocale()` return that lowercase form, so compare against `'en-us'` — a test for `'en-US'` never matches. Normalize your own values with the re-exported `canonicalizeLocale()` rather than casing by hand.
 
 ### SSR token strategy
 
@@ -266,9 +266,8 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 | `useSignal(signal)` | `<T>(s: Signal<T>) => T` | Low-level: subscribe a component to any base-SDK signal. |
 | `createLocaleStore(initial?)` | `(s?: string) => Signal<string>` | Make a user-locale store outside React (module scope). |
 | `t` / `currentlyLoadedLocale` / `sTranslations` | `Signal<…>` | Raw signals for direct subscription outside React. In components, prefer the hooks. |
-| `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to canonical BCP 47 (`'en-us'` → `'en-US'`) — the same normalization the SDK applies internally. |
+| `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to the lowercase wire form (`'en-US'` → `'en-us'`) — the same normalization the SDK applies internally. |
 | `useWriteEnabled()` | `() => boolean \| undefined` | Whether this session may register content, as decided by the server. See [Write gating](#write-gating) — the `undefined` state is meaningful. |
-| `writeEnabled` | `Signal<boolean \| undefined>` | Raw signal behind `useWriteEnabled()`. Read-only — the server owns this value. |
 
 ## Write gating
 
@@ -291,6 +290,8 @@ Three distinct states — **don't collapse them to a boolean**:
 | `true` | This session registers content directly. |
 
 Defaulting `undefined` to `false` will render a read-only state during every first paint and, under SSR, cause a hydration mismatch.
+
+This package deliberately does **not** re-export the raw `writeEnabled` signal. It is `undefined` for the whole of a server render, so reading it directly during render defeats the guard `useWriteEnabled()` provides. If you genuinely need it outside React's render cycle, import it from `langsys-js-typescript` directly — the capability is available, it just isn't blessed under this binding's name.
 
 ### Write grants — for login-walled apps
 

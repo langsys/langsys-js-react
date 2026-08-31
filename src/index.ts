@@ -44,7 +44,25 @@ import {
 // Reactive primitives (raw signals) — re-exported for advanced/direct
 // subscription. `tSignal` is exposed under the friendlier name `t`. In
 // components, prefer the hooks (`useT`, `useCurrentLocale`, …).
-export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t, writeEnabled } from 'langsys-js-typescript';
+export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from 'langsys-js-typescript';
+
+// `writeEnabled` is deliberately NOT re-exported by reference. Do not add it.
+//
+// The three signals above are SSR-safe: `initialTranslations` seeds them before
+// the server render, so reading them raw is legitimate advanced use.
+// `writeEnabled` is the opposite — it is browser-authoritative and *defined* as
+// `undefined` for the whole of a server render. `useWriteEnabled()` exists to
+// adapt exactly that, pinning `getServerSnapshot` so the server can never emit
+// capability-dependent markup. Re-exporting the raw signal alongside the adapted
+// one would hand callers a supported-looking way to defeat the pin while
+// implying the two are interchangeable.
+//
+// BIND-6 mandates re-exporting by reference everything that does NOT need
+// adapting; this signal is the one that does, so the mandate excludes it.
+// The capability is not withheld — `langsys-js-typescript` is a peer dependency
+// and an advanced consumer can import the raw signal from the core directly, on
+// their own judgement. This binding simply declines to bless that path under its
+// own name. Absence is pinned by `src/write-enabled-surface.test.ts`.
 
 // Write grant — supply a short-lived token after `init()` (e.g. once the user
 // logs in) so the server re-evaluates the session as write-enabled. Standalone

@@ -37,8 +37,9 @@ export function useSignal<T>(signal: Signal<T>): T {
  *
  * Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+), so
  * `'en-us'` still works on input — but `currentlyLoadedLocale` always emits the
- * canonical form (`'en-US'`), so prefer canonical casing to keep comparisons
- * against it straightforward.
+ * canonical form (`'en-us'` — lowercase, per WIRE-3), so compare against the
+ * lowercase form. Verified against the core, not assumed: `canonicalizeLocale`
+ * lowercases both subtags, so a consumer testing `=== 'en-US'` never matches.
  */
 export function createLocaleStore(initial = 'en-US'): Signal<string> {
     return createSignal<string>(initial);

@@ -104,3 +104,60 @@ describe('useWriteEnabled', () => {
         expect(container.querySelector('#probe')?.textContent).toBe('true');
     });
 });
+
+/**
+ * GATE-2 / BIND-1 through RENDERED OUTPUT.
+ *
+ * The block above asserts the tri-state by stringifying the hook's return into
+ * a text node. That is rendered output, but it is one step from reading the
+ * hook directly. These assert the shape a consumer actually ships: markup that
+ * BRANCHES on capability, so a regression that collapses the tri-state changes
+ * what the user sees rather than only what a test prints.
+ */
+describe('useWriteEnabled — capability through rendered markup', () => {
+    /** Renders three mutually exclusive branches, one per state. */
+    function CapabilityUI() {
+        const enabled = useWriteEnabled();
+        if (enabled === undefined) return createElement('p', { id: 'pending' }, 'checking…');
+        return enabled
+            ? createElement('button', { id: 'register' }, 'Register content')
+            : createElement('p', { id: 'readonly' }, 'Read-only session');
+    }
+
+    it('renders the pending branch while authorization is unknown', async () => {
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(createElement(CapabilityUI));
+        document.body.appendChild(container);
+        await act(async () => { hydrateRoot(container, createElement(CapabilityUI)); });
+
+        // undefined must NOT render as read-only — that is the collapse this guards.
+        expect(container.querySelector('#pending')).not.toBeNull();
+        expect(container.querySelector('#readonly')).toBeNull();
+        expect(container.querySelector('#register')).toBeNull();
+    });
+
+    it('renders read-only and write-enabled as DIFFERENT markup', async () => {
+        const container = document.createElement('div');
+        container.innerHTML = renderToString(createElement(CapabilityUI));
+        document.body.appendChild(container);
+        await act(async () => { hydrateRoot(container, createElement(CapabilityUI)); });
+
+        await act(async () => { writeEnabled.set(false); });
+        expect(container.querySelector('#readonly')).not.toBeNull();
+        expect(container.querySelector('#register')).toBeNull();
+
+        await act(async () => { writeEnabled.set(true); });
+        expect(container.querySelector('#register')).not.toBeNull();
+        expect(container.querySelector('#readonly')).toBeNull();
+    });
+
+    it('SSR output renders the pending branch even when the signal already holds a value', () => {
+        // The server-snapshot pin, asserted where it is visible to a user: the
+        // server must not emit capability-dependent markup, or hydration
+        // disagrees with it.
+        writeEnabled.set(true);
+        const html = renderToString(createElement(CapabilityUI));
+        expect(html).toContain('id="pending"');
+        expect(html).not.toContain('id="register"');
+    });
+});

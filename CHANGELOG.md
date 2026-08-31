@@ -12,7 +12,7 @@
   - **`useWriteEnabled()`** → `boolean | undefined`. Tri-state, and the states are distinct: `undefined` means authorization hasn't landed (and is the value throughout SSR), `false` means read-only, `true` means this session registers directly. Don't collapse it to a boolean or default `undefined` to `false`.
   - **`setWriteGrant(grant)`** → `Promise<void>`, also on `LangsysApp`. For login-walled apps: supply a short-lived JWT after `init()` and the session is re-authorized with an `X-Write-Grant` header. It re-authorizes rather than only storing the token.
   - **`writeGrant`** init option, inherited from the base config type. Prefer the function form — grants are short-lived and a static string expires while the app is still mounted.
-  - **`writeEnabled`** raw signal and the **`WriteGrant`** type re-exported.
+  - **`WriteGrant`** type re-exported. The raw **`writeEnabled`** signal is deliberately *not* re-exported: it is the one signal that needs adapting, since it is `undefined` for the whole of a server render, and re-exporting it alongside `useWriteEnabled()` would offer a supported-looking way to defeat the hydration guard. Advanced consumers can import it from `langsys-js-typescript` directly.
 - **E2E testbed** (`example/Testbed.tsx` + `example/e2e/write-gating.mjs`, `npm run test:e2e`) — drives a real browser against a live API and asserts on captured request payloads *and* response status.
 
 ### Fixed

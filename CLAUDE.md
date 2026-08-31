@@ -58,10 +58,13 @@ useSignal(signal)       -> T               // low-level Signal → value bridge
 createLocaleStore(initial?)  // Signal<string> — the writable analog
 t, currentlyLoadedLocale, sTranslations  // raw Signals; prefer the hooks in components
 createSignal                 // re-exported generic Signal factory
-canonicalizeLocale(locale)   // re-exported BCP 47 normalizer ('en-us' → 'en-US'); the SDK canonicalizes all locale input since base 0.3.0
+canonicalizeLocale(locale)   // re-exported BCP 47 normalizer — LOWERCASES ('en-US' → 'en-us'), per WIRE-3; the SDK canonicalizes all locale input since base 0.3.0
 
 // Write gating (ticket 838; requires the unreleased base SDK build that carries it)
-writeEnabled                 // Signal<boolean | undefined> — server-decided, read-only, browser-authoritative
+// NOTE: the raw `writeEnabled` signal is deliberately NOT re-exported — see the
+// reasoning at the export site in src/index.ts, pinned by write-enabled-surface.test.ts.
+// Access it through useWriteEnabled(); advanced consumers can import the raw signal
+// from langsys-js-typescript directly.
 setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
 writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
 
