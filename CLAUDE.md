@@ -38,7 +38,8 @@ The Svelte wrapper adapts a native store *into* the SDK (`writable` → `Signal`
 ## Public API
 
 ```typescript
-// Main entry point — wraps init to accept a Signal<string>, delegates everything else
+// Main entry point — the base SDK singleton re-exported BY REFERENCE (not a wrapper);
+// `init` is typed to take a Signal<string>. Nothing is delegated, so nothing can be missed.
 LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, debug?, ssrTokenStrategy?, initialTranslations?, initialTranslationsLocale? })
 LangsysApp.t                     // current TFunction (snapshot — not reactive on its own; use useT())
 LangsysApp.getCountries() / getCurrencies() / getDialCodes() / getLocales*() / ...

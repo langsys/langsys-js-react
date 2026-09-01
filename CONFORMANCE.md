@@ -8,7 +8,7 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Spec text read | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a` |
 | Read at | 2026-08-31T20:59:40Z |
 | Repo state | branch `feature/838_write_gating_reland` |
-| Suite | **46 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
+| Suite | **46 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 6-test entry-point surface pin and a 4-test signal-absence pin). Counts transcribed from the run, not generated — `_dev_/` has no generator for this file. |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
 | Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `cfe8d40` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
@@ -152,7 +152,7 @@ test.
 |---|---|---|
 | `getServerSnapshot` unpinned: `writeEnabledServerSnapshot` → `writeEnabled.get` (`src/hooks.ts:90`) | **3** — `reports undefined during server rendering even once the signal holds a value`; `hydrates without mismatch when authorization resolves before hydration`; `SSR output renders the pending branch even when the signal already holds a value` | 7/7 green |
 | Raw `writeEnabled` re-export restored to `src/index.ts:47` | **1** — `does not re-export the raw signal`. Both positive controls stayed green, confirming the row failed for the right reason. | 4/4 green |
-| Entry point replaced with an enumerating wrapper exposing only 4 members (reproducing the 0.6.7 shape) | **9 of 10** — all five named regression rows, plus `every core member is reachable`, `is the core singleton by reference`, `members are identical references` and `survives destructuring`. The positive control stayed green, so the failures are real absences rather than a broken generator. | 10/10 green |
+| Public member (`refresh`) hidden behind the entry point | **3 of 6** — `every PUBLIC core member is reachable`, `is the core singleton by reference`, `members are identical references`. Hiding a *private* member (`resolveLocale`) instead reddens **1 of 6** — identity only, correctly, since it is not public API. | 6/6 green |
 
 ## Corrections
 
@@ -213,7 +213,7 @@ The exported type does not widen the privates either — `Omit<typeof LangsysApp
 
 Caught in review by checking the type boundary this file never consulted.
 
-**BIND-6 — the raw `writeEnabled` re-export was removed.****BIND-6 — the raw `writeEnabled` re-export was removed.** It was present at
+**BIND-6 — the raw `writeEnabled` re-export was removed.** It was present at
 `src/index.ts:47`. Removed after review: it is the one signal that *needs*
 adapting, so BIND-6's re-export mandate excludes it, and offering it beside
 `useWriteEnabled()` handed callers a supported-looking way to defeat the

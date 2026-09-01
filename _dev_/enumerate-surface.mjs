@@ -14,7 +14,8 @@
  *   node _dev_/enumerate-surface.mjs            # diff core vs binding
  *   node _dev_/enumerate-surface.mjs --selftest # prove the diff detects a hidden member
  *
- * Exit codes: 0 = no dropped members; 1 = members dropped; 2 = selftest failed.
+ * Exit codes: 0 = clean; 1 = a dropped member, shape drift OR identity loss;
+ * 2 = selftest failed.
  */
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
@@ -45,12 +46,41 @@ export function surfaceOf(target) {
 }
 
 /**
- * Names declared `private` in a .d.ts. TypeScript emits them as bare
- * `private name;` lines with no signature, which is what makes them findable.
+ * Names declared `private` inside ONE class block of a .d.ts. TypeScript emits
+ * them as bare `private name;` lines, which is what makes them findable.
+ *
+ * Scoping to the class matters and is not cosmetic. A file-global scan over this
+ * core matches 74 names across six classes; only 13 belong to the one we are
+ * measuring. Today nothing collides, so the answer happened to be right — but a
+ * private member of an unrelated class sharing a name with a PUBLIC member here
+ * would silently reclassify ours as private and drop it out of the diff, exit 0.
+ * That is a false-negative channel in the direction this script exists to
+ * prevent. Verified by probe: adding `private refresh;` to the `Translations`
+ * block makes a file-global scan report public 19 / dropped 0 / exit 0 while
+ * `refresh` is genuinely hidden in the binding.
+ *
+ * `className` omitted → file-global, retained only so the selftest can build
+ * fixtures from bare strings.
  */
-export function privateNamesFrom(dts) {
-    return new Set([...dts.matchAll(/^\s*private\s+([A-Za-z_]\w*)\s*;/gm)].map((m) => m[1]));
+export function privateNamesFrom(dts, className) {
+    let scope = dts;
+    if (className) {
+        const start = dts.search(new RegExp(`^declare class ${className}\\b[^{]*\\{`, 'm'));
+        if (start === -1) return new Set();
+        // Walk braces from the class body to its close, so nested blocks are kept
+        // and the following class is not.
+        let i = dts.indexOf('{', start), depth = 0, end = i;
+        for (; i < dts.length; i++) {
+            if (dts[i] === '{') depth++;
+            else if (dts[i] === '}' && --depth === 0) { end = i; break; }
+        }
+        scope = dts.slice(start, end);
+    }
+    return new Set([...scope.matchAll(/^\s*private\s+([A-Za-z_]\w*)\s*;/gm)].map((m) => m[1]));
 }
+
+/** The core class whose surface this binding re-exports. */
+export const CORE_CLASS = 'LangsysAppClass';
 
 /**
  * Shape of a member INCLUDING its descriptor kind. Reading `obj[name]` invokes a
@@ -132,13 +162,13 @@ const binding = require('../dist/index.js').LangsysApp;
 // PUBLIC is decided by the .d.ts next to the resolved index.js — not by the
 // runtime chain, where `private` has been erased.
 const dtsPath = corePath.replace(/\.js$/, '.d.ts');
-const privateNames = privateNamesFrom(readFileSync(dtsPath, 'utf8'));
+const privateNames = privateNamesFrom(readFileSync(dtsPath, 'utf8'), CORE_CLASS);
 
 const { coreSurface, dropped, shapeDiff, notIdentical } = diff(core, binding, privateNames);
 console.log(`core module resolved: ${corePath}`);
 console.log(`core repo @ ${sha}`);
 console.log(`type surface: ${dtsPath}`);
-console.log(`declared private in .d.ts (${privateNames.size} names, class-scoped matches excluded from the list below)`);
+console.log(`declared private in ${CORE_CLASS} (${privateNames.size} names, scoped to that class block)`);
 console.log(`core PUBLIC members (${coreSurface.length}): ${coreSurface.join(', ')}`);
 console.log(`dropped (${dropped.length}): ${dropped.join(', ') || 'none'}`);
 console.log(`shape differs (${shapeDiff.length}): ${shapeDiff.map((d) => `${d.m}[core=${d.core} binding=${d.binding}]`).join(', ') || 'none'}`);

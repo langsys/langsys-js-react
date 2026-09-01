@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { privateNamesFrom, CORE_CLASS } from '../_dev_/enumerate-surface.mjs';
 import { LangsysApp as core } from 'langsys-js-typescript';
 import { LangsysApp } from './index.js';
 
@@ -39,9 +40,10 @@ function surfaceOf(target: object): string[] {
 describe('LangsysApp surface', () => {
     const coreSurface = surfaceOf(core);
     const dtsPath = realpathSync(require.resolve('langsys-js-typescript')).replace(/\.js$/, '.d.ts');
-    const privateNames = new Set(
-        [...readFileSync(dtsPath, 'utf8').matchAll(/^\s*private\s+([A-Za-z_]\w*)\s*;/gm)].map((m) => m[1]),
-    );
+    // Imported, not re-implemented: a second copy of the classification regex
+    // drifts from the first, and then the suite and the enumerator disagree
+    // about what "public" means while both look right.
+    const privateNames = privateNamesFrom(readFileSync(dtsPath, 'utf8'), CORE_CLASS);
     const publicSurface = coreSurface.filter((m) => !privateNames.has(m));
 
     it('positive control: the core exposes a substantial surface', () => {
