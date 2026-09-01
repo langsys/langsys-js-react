@@ -45,6 +45,45 @@ describe('private-field reachability', () => {
         expect(typeof usesPrivateFields).toBe('boolean');
     });
 
+    it('fixture: a NAIVE Proxy BREAKS private-field access — the control failing', () => {
+        // The trap this pin exists for, demonstrated rather than described.
+        // Private access is keyed on the receiver identity: reading `#secret`
+        // with the Proxy as `this` throws, because the Proxy is not the object
+        // the field was installed on.
+        class WithPrivate {
+            #secret = 42;
+            read() { return this.#secret; }
+        }
+        const real = new WithPrivate();
+        expect(real.read()).toBe(42); // positive control: works on the real object
+
+        const naive = new Proxy(real, { get: (t, p) => (t as never)[p] }) as WithPrivate;
+        // The naive trap returns an UNBOUND method, so `this` becomes the Proxy.
+        const unbound = naive.read;
+        expect(() => unbound.call(naive)).toThrow(TypeError);
+    });
+
+    it('fixture: a correctly-bound Proxy survives, and identity export cannot fail', () => {
+        class WithPrivate {
+            #secret = 42;
+            read() { return this.#secret; }
+        }
+        const real = new WithPrivate();
+
+        // Binding to the target fixes it — this is the shape a Proxy MUST use.
+        const bound = new Proxy(real, {
+            get: (t, p) => {
+                const v = (t as unknown as Record<PropertyKey, unknown>)[p];
+                return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+            },
+        }) as WithPrivate;
+        expect(bound.read()).toBe(42);
+
+        // Identity export skips the question entirely: there is no trap, so
+        // there is no receiver to get wrong.
+        expect(real.read()).toBe(42);
+    });
+
     it('behavioural: a real call through our export reaches core internals', () => {
         // `detectPreferredLocale` reads the core's own state. Through a Proxy or
         // a re-bound wrapper this is where a private-field read would throw.

@@ -8,9 +8,9 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Spec text read | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a` |
 | Read at | 2026-08-31T20:59:40Z |
 | Repo state | branch `feature/838_write_gating_reland` |
-| Suite | **48 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
+| Suite | **50 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
-| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `974081b` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
+| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `cfe8d40` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
 | Rules applicable | **66 of 67** — only [HINT-2](#hint-2) is excluded (`profile: server`) |
 | Graded rows | **21** — computed from this file's tables, not hand-counted |
@@ -67,7 +67,7 @@ the code path. Collapsing them hides which of the two is watching.
 | BIND-3 — no network behaviour of its own | `provisional` | Probes over `src/`: `fetch(\|XMLHttpRequest\|axios` → **0**; `setTimeout\|setInterval\|queueMicrotask` → **0**; `sessionStorage\|localStorage` → **0**. Controls non-zero (see [Probes](#probes)). |
 | BIND-4 — no config the core does not define | `provisional` | `iLangsysInitConfig` is `Omit<iVanillaInitConfig, 'UserLocaleStore'> & { UserLocaleStore: Signal<string> }` (`src/index.ts`). The single divergence narrows an existing key's type; it adds none. `writeGrant` is inherited, not declared here. |
 | BIND-5 — no caching of lookups; presence must survive any cache | `partial` | Cache half: `provisional`. Probe `useMemo\|useCallback\|React.memo\|memo(` over `src/` **and** `example/` → **0**; no cache exists, so absent≠present-but-null cannot be lost here. **Re-entry half: a finding, see [Route re-entry](#route-re-entry-measurement).** A stable-element layout does not re-enter `t()` on navigation, which is the persistent-layout discovery gap; not fixable in this binding. |
-| BIND-6 — wrap the narrowest surface | `provisional` | Two halves. Signals: `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export, with two positive controls. Entry point: `src/surface.test.ts` (10 tests) pins that `LangsysApp` **is** the core singleton by reference — the narrowest possible wrapper is none at all. Reachability is generated from the core's prototype at test time, never from a list kept here. |
+| BIND-6 — wrap the narrowest surface | `provisional` | **Corrected: was `provisional` on a wrapper that silently dropped five core methods; now `provisional` on a by-reference export with zero dropped — same grade, different thing being graded.** Entry point: `src/surface.test.ts` (10 tests) pins that `LangsysApp` **is** the core singleton, with reachability generated from the core prototype at test time. Enumeration: `_dev_/enumerate-surface.mjs` reports dropped 0, shape-differs 0, not-identical 0; its `--selftest` proves it finds a deliberately hidden member. Signals: `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export. |
 
 ## 2 — Rules this binding could interfere with
 
@@ -237,6 +237,27 @@ flush are browser-JS behaviour with no server-SDK analogue — so this file grad
 them as applicable. Reported upstream; if the table wins instead, the three rows
 above become `n/a (profile: server)`.
 
+## Surface enumeration
+
+The entry-point measurement is produced by `_dev_/enumerate-surface.mjs`, never
+typed. Re-derived at write time:
+
+```bash
+npm run build && node _dev_/enumerate-surface.mjs
+#   core module resolved: /Users/humbertocuadra/Documents/dev/langsys-js-typescript/dist/index.js
+#   core repo @ cfe8d40
+#   core public members (22)
+#   dropped (0): none
+#   shape differs (0): none
+#   not identical by reference (0): none      exit 0
+
+node _dev_/enumerate-surface.mjs --selftest   # hides a member, expects to find it; exit 0
+```
+
+The selftest is the load-bearing half. A diff reporting "zero dropped" is
+indistinguishable from a diff that cannot detect anything, so the script proves
+it finds a deliberately hidden member before its zero is worth reading.
+
 ## Probes
 
 All probe counts in this file are produced by `_dev_/conformance-probe.py` — reproduced in
@@ -265,7 +286,7 @@ Controls, current run: `PHRASE_MARKER_ATTR` → **2**, `useSyncExternalStore` �
    not part of the unit suite and depends on a running API. Raising the ceiling
    means making that run reproducible in CI, which it currently is not.
 2. **The core is consumed via a symlink, not the published tarball.** So this
-   file certifies the binding against `974081b`, not against anything a consumer
+   file certifies the binding against `cfe8d40`, not against anything a consumer
    can install. `src/upstream-precondition.test.ts` makes the substitution
    visible rather than silent, but cannot make it equivalent — a symlinked
    `dist/` bypasses the `files` allowlist, the `exports` map and publint.
