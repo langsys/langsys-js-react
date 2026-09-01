@@ -8,9 +8,9 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Spec text read | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a` |
 | Read at | 2026-08-31T20:59:40Z |
 | Repo state | branch `feature/838_write_gating_reland` |
-| Suite | **34 tests / 8 files**, all passing (includes a 3-test upstream precondition and a 4-test surface-absence pin) |
+| Suite | **48 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
-| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `82678b6` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
+| Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `974081b` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
 | Rules applicable | **66 of 67** — only [HINT-2](#hint-2) is excluded (`profile: server`) |
 | Graded rows | **21** — computed from this file's tables, not hand-counted |
@@ -67,7 +67,7 @@ the code path. Collapsing them hides which of the two is watching.
 | BIND-3 — no network behaviour of its own | `provisional` | Probes over `src/`: `fetch(\|XMLHttpRequest\|axios` → **0**; `setTimeout\|setInterval\|queueMicrotask` → **0**; `sessionStorage\|localStorage` → **0**. Controls non-zero (see [Probes](#probes)). |
 | BIND-4 — no config the core does not define | `provisional` | `iLangsysInitConfig` is `Omit<iVanillaInitConfig, 'UserLocaleStore'> & { UserLocaleStore: Signal<string> }` (`src/index.ts`). The single divergence narrows an existing key's type; it adds none. `writeGrant` is inherited, not declared here. |
 | BIND-5 — no caching of lookups; presence must survive any cache | `partial` | Cache half: `provisional`. Probe `useMemo\|useCallback\|React.memo\|memo(` over `src/` **and** `example/` → **0**; no cache exists, so absent≠present-but-null cannot be lost here. **Re-entry half: a finding, see [Route re-entry](#route-re-entry-measurement).** A stable-element layout does not re-enter `t()` on navigation, which is the persistent-layout discovery gap; not fixable in this binding. |
-| BIND-6 — wrap the narrowest surface | `provisional` | `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export, with two positive controls. Reasoning at the export site, `src/index.ts:49-65`. |
+| BIND-6 — wrap the narrowest surface | `provisional` | Two halves. Signals: `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export, with two positive controls. Entry point: `src/surface.test.ts` (10 tests) pins that `LangsysApp` **is** the core singleton by reference — the narrowest possible wrapper is none at all. Reachability is generated from the core's prototype at test time, never from a list kept here. |
 
 ## 2 — Rules this binding could interfere with
 
@@ -152,6 +152,7 @@ test.
 |---|---|---|
 | `getServerSnapshot` unpinned: `writeEnabledServerSnapshot` → `writeEnabled.get` (`src/hooks.ts:90`) | **3** — `reports undefined during server rendering even once the signal holds a value`; `hydrates without mismatch when authorization resolves before hydration`; `SSR output renders the pending branch even when the signal already holds a value` | 7/7 green |
 | Raw `writeEnabled` re-export restored to `src/index.ts:47` | **1** — `does not re-export the raw signal`. Both positive controls stayed green, confirming the row failed for the right reason. | 4/4 green |
+| Entry point replaced with an enumerating wrapper exposing only 4 members (reproducing the 0.6.7 shape) | **9 of 10** — all five named regression rows, plus `every core member is reachable`, `is the core singleton by reference`, `members are identical references` and `survives destructuring`. The positive control stayed green, so the failures are real absences rather than a broken generator. | 10/10 green |
 
 ## Corrections
 
@@ -177,6 +178,27 @@ reproducible as written.
 
 This is the third sighting of that class across the fleet (fixture, docstring,
 now full docs surface), each in a different medium.
+
+**The entry point silently dropped five core methods, and shipped that way in
+0.6.7.** `LangsysAppReact` was a hand-written class listing each core method and
+delegating it. Any method nobody remembered to add was simply unreachable
+through this binding while existing on the core. Measured against the core's
+prototype: `applyAuthorization`, `findBestLocaleMatch`,
+`getUserLanguagePreferences`, `parseAcceptLanguageHeader` and `resolveLocale` —
+five, on the **published** version, not merely on this branch.
+
+Nothing caught it because nothing compared the two surfaces. Typecheck passed
+(the class was internally consistent), the suite passed (every test was written
+against members the class had), and no consumer complaint is required for a
+method to be missing — it is simply absent, and absence raises nothing.
+
+Replaced with a by-reference export of the core singleton, typed to narrow
+`init` to the React config. This removes the failure mode rather than patching
+it: there is no list to fall out of date. It is sound only because the class
+overrode no *behaviour* — all 20 members were straight delegations, verified by
+scanning for non-trivial bodies (count: 0) — so the sole thing needing
+expression was a type. Vue and Solid independently lost the identical five to
+the same shape; this is a defect class, not a local oversight.
 
 **BIND-6 — the raw `writeEnabled` re-export was removed.** It was present at
 `src/index.ts:47`. Removed after review: it is the one signal that *needs*
@@ -243,7 +265,7 @@ Controls, current run: `PHRASE_MARKER_ATTR` → **2**, `useSyncExternalStore` �
    not part of the unit suite and depends on a running API. Raising the ceiling
    means making that run reproducible in CI, which it currently is not.
 2. **The core is consumed via a symlink, not the published tarball.** So this
-   file certifies the binding against `82678b6`, not against anything a consumer
+   file certifies the binding against `974081b`, not against anything a consumer
    can install. `src/upstream-precondition.test.ts` makes the substitution
    visible rather than silent, but cannot make it equivalent — a symlinked
    `dist/` bypasses the `files` allowlist, the `exports` map and publint.

@@ -125,100 +125,32 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
 }
 
 /**
- * React SDK entry point. Delegates everything to the underlying
- * `langsys-js-typescript` singleton. Because React's locale store is already a
- * `Signal` (unlike Svelte's `Writable`, which needs adapting), `init` is a
- * straight passthrough — the React-native concerns live in the hooks and the
- * `<Translate>` component, not here.
+ * React SDK entry point — the core singleton itself, re-exported **by
+ * reference**, with `init` narrowed to the React-flavoured config.
+ *
+ * This deliberately is NOT a wrapper class. The previous implementation listed
+ * each core method and delegated it, which meant any method nobody remembered
+ * to add was unreachable through this binding while existing on the core —
+ * silently, with a green typecheck and a green suite, because nothing compares
+ * the two surfaces. Five methods were lost that way and shipped in 0.6.7:
+ * `applyAuthorization`, `findBestLocaleMatch`, `getUserLanguagePreferences`,
+ * `parseAcceptLanguageHeader` and `resolveLocale`. Vue and Solid independently
+ * lost the same five to the same shape.
+ *
+ * Exporting the singleton itself removes the failure mode rather than patching
+ * it: there is no list to fall out of date, so a method added to the core is
+ * reachable here the moment it exists. That is only sound because this binding
+ * overrides no *behaviour* — every member of the old class was a straight
+ * delegation — so the sole thing that needed expressing was a type.
+ *
+ * The type narrows `init` to require a `Signal<string>` for `UserLocaleStore`.
+ * The core accepts the broader `LocaleSource`, which `Signal<string>` satisfies,
+ * so this is a narrowing for React callers and not a divergence. Identity is
+ * preserved: `LangsysApp` here **is** the core's `LangsysApp`, so `this` binds
+ * correctly and there is no forwarding layer to get wrong.
+ *
+ * Pinned by `src/surface.test.ts`.
  */
-class LangsysAppReact {
-    /** Initialize Langsys. Pass a `Signal<string>` (from `createLocaleStore`) as `UserLocaleStore`. */
-    public init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
-        return _LangsysApp.init(config);
-    }
-
-    public get Translations() {
-        return _LangsysApp.Translations;
-    }
-
-    public get translationsLoadingPromise() {
-        return _LangsysApp.translationsLoadingPromise;
-    }
-
-    /** Current translation function. Reads fresh state on every call (not reactive on its own — use `useT()` in components). */
-    public get t(): TFunction {
-        return _LangsysApp.t;
-    }
-
-    public get debug() {
-        return _LangsysApp.debug;
-    }
-
-    public refresh() {
-        return _LangsysApp.refresh();
-    }
-
-    /**
-     * Supply or replace the write grant after `init()` — the login-walled case,
-     * where the token only exists once the user has authenticated.
-     *
-     * This re-authorizes so the server re-evaluates the session with the new
-     * `X-Write-Grant` header, then applies the returned `write_enabled`. Await it
-     * if you need to know the session flipped; misses occurring after it lands
-     * register directly, while earlier ones were already reported by the
-     * discovery lane.
-     *
-     * Prefer the function form of `writeGrant` at `init()` where you can: the
-     * grant is short-lived, and a provider is called fresh for each request
-     * rather than expiring mid-session.
-     */
-    public setWriteGrant(grant: WriteGrant | undefined): Promise<void> {
-        return _LangsysApp.setWriteGrant(grant);
-    }
-
-    public getCountries(inLocale?: string) {
-        return _LangsysApp.getCountries(inLocale);
-    }
-    public getCountryName(forCountryCode: string, inLocale?: string) {
-        return _LangsysApp.getCountryName(forCountryCode, inLocale);
-    }
-    public getCurrencies(inLocale?: string) {
-        return _LangsysApp.getCurrencies(inLocale);
-    }
-    public getCurrencyName(forCurrencyCode: string, inLocale?: string) {
-        return _LangsysApp.getCurrencyName(forCurrencyCode, inLocale);
-    }
-    public getDialCodes(inLocale?: string) {
-        return _LangsysApp.getDialCodes(inLocale);
-    }
-
-    public getLocales(inLocale?: string) {
-        return _LangsysApp.getLocales(inLocale);
-    }
-    public getLocalesFlat(inLocale?: string) {
-        return _LangsysApp.getLocalesFlat(inLocale);
-    }
-    public getLocalesData(inLocale?: string, forceRefresh?: boolean) {
-        return _LangsysApp.getLocalesData(inLocale, forceRefresh);
-    }
-    public getLocalesFormat(format: '' | 'flat' | 'data' = '', inLocale?: string) {
-        return _LangsysApp.getLocalesFormat(format, inLocale);
-    }
-    public getLocaleName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleName(forLocale, shortName, inLocale);
-    }
-    public getLocaleNameWithLookup(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleNameWithLookup(forLocale, shortName, inLocale);
-    }
-
-    /** @deprecated use `getLocaleNameWithLookup` or `getLocaleName` */
-    public getLanguageName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLanguageName(forLocale, shortName, inLocale);
-    }
-
-    public detectPreferredLocale(acceptLanguageHeader?: string | null, supportedLocales?: string[]) {
-        return _LangsysApp.detectPreferredLocale(acceptLanguageHeader, supportedLocales);
-    }
-}
-
-export const LangsysApp = new LangsysAppReact();
+export const LangsysApp: Omit<typeof _LangsysApp, 'init'> & {
+    init(config: iLangsysInitConfig): Promise<iLangsysResponse>;
+} = _LangsysApp;
