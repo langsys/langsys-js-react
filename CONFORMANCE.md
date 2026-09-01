@@ -8,7 +8,7 @@ Conformance of this **binding** against the SDK Behaviour Spec.
 | Spec text read | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a` |
 | Read at | 2026-08-31T20:59:40Z |
 | Repo state | branch `feature/838_write_gating_reland` |
-| Suite | **50 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
+| Suite | **46 tests / 10 files**, all passing (includes a 3-test upstream precondition, a 10-test entry-point surface pin and a 4-test signal-absence pin) |
 | Evidence grade of the suite | **`mock`** — jsdom, no network, core resolved through a local symlink |
 | Core consumed | `langsys-js-typescript` `feature/838_write_key_gating_reland` @ `cfe8d40` (declares `0.6.5`), via a gitignored `node_modules` symlink — **not** the published `0.6.5`. Resolved from the link at write time (`cd node_modules/langsys-js-typescript && git rev-parse HEAD`), not quoted from prior notes — see [Corrections](#corrections). |
 | Profiles | `browser` · `binding` · `all` |
@@ -67,7 +67,7 @@ the code path. Collapsing them hides which of the two is watching.
 | BIND-3 — no network behaviour of its own | `provisional` | Probes over `src/`: `fetch(\|XMLHttpRequest\|axios` → **0**; `setTimeout\|setInterval\|queueMicrotask` → **0**; `sessionStorage\|localStorage` → **0**. Controls non-zero (see [Probes](#probes)). |
 | BIND-4 — no config the core does not define | `provisional` | `iLangsysInitConfig` is `Omit<iVanillaInitConfig, 'UserLocaleStore'> & { UserLocaleStore: Signal<string> }` (`src/index.ts`). The single divergence narrows an existing key's type; it adds none. `writeGrant` is inherited, not declared here. |
 | BIND-5 — no caching of lookups; presence must survive any cache | `partial` | Cache half: `provisional`. Probe `useMemo\|useCallback\|React.memo\|memo(` over `src/` **and** `example/` → **0**; no cache exists, so absent≠present-but-null cannot be lost here. **Re-entry half: a finding, see [Route re-entry](#route-re-entry-measurement).** A stable-element layout does not re-enter `t()` on navigation, which is the persistent-layout discovery gap; not fixable in this binding. |
-| BIND-6 — wrap the narrowest surface | `provisional` | **Corrected: was `provisional` on a wrapper that silently dropped five core methods; now `provisional` on a by-reference export with zero dropped — same grade, different thing being graded.** Entry point: `src/surface.test.ts` (10 tests) pins that `LangsysApp` **is** the core singleton, with reachability generated from the core prototype at test time. Enumeration: `_dev_/enumerate-surface.mjs` reports dropped 0, shape-differs 0, not-identical 0; its `--selftest` proves it finds a deliberately hidden member. Signals: `src/write-enabled-surface.test.ts` (4 tests) pins the deliberate absence of the raw `writeEnabled` re-export. |
+| BIND-6 — wrap the narrowest surface | `provisional` | **Grade unchanged across two corrections; the artifact beneath it changed twice.** Entry point is a by-reference export, not a wrapper class — `src/surface.test.ts` (6 tests) pins that `LangsysApp` **is** the core singleton, with the expected member list derived from the `.d.ts` PUBLIC surface at test time. `_dev_/enumerate-surface.mjs`: public 20, dropped 0, shape-differs 0, not-identical 0; its `--selftest` proves five detection properties before any zero is read. Signals: `src/write-enabled-surface.test.ts` (4 tests). |
 
 ## 2 — Rules this binding could interfere with
 
@@ -179,28 +179,41 @@ reproducible as written.
 This is the third sighting of that class across the fleet (fixture, docstring,
 now full docs surface), each in a different medium.
 
-**The entry point silently dropped five core methods, and shipped that way in
-0.6.7.** `LangsysAppReact` was a hand-written class listing each core method and
-delegating it. Any method nobody remembered to add was simply unreachable
-through this binding while existing on the core. Measured against the core's
-prototype: `applyAuthorization`, `findBestLocaleMatch`,
-`getUserLanguagePreferences`, `parseAcceptLanguageHeader` and `resolveLocale` —
-five, on the **published** version, not merely on this branch.
+**The entry point was a wrapper class; it is now a by-reference export. It did
+NOT drop any public API — a correction of a correction.**
 
-Nothing caught it because nothing compared the two surfaces. Typecheck passed
-(the class was internally consistent), the suite passed (every test was written
-against members the class had), and no consumer complaint is required for a
-method to be missing — it is simply absent, and absence raises nothing.
+The wrapper listed each core method and delegated it. It has been replaced by a
+by-reference export of the core singleton, typed to narrow `init`.
 
-Replaced with a by-reference export of the core singleton, typed to narrow
-`init` to the React config. This removes the failure mode rather than patching
-it: there is no list to fall out of date. It is sound only because the class
-overrode no *behaviour* — all 20 members were straight delegations, verified by
-scanning for non-trivial bodies (count: 0) — so the sole thing needing
-expression was a type. Vue and Solid independently lost the identical five to
-the same shape; this is a defect class, not a local oversight.
+An earlier revision of this file recorded that the wrapper "silently dropped
+five core methods" — `applyAuthorization`, `getUserLanguagePreferences`,
+`parseAcceptLanguageHeader`, `findBestLocaleMatch`, `resolveLocale` — and that
+they were therefore missing for anyone who installed 0.6.7. **Both halves were
+wrong.** All five are declared `private` in the core's `.d.ts`
+(`dist/index.d.ts:548`, `:596`, `:597`, `:598`, `:604`; control: `getCountries`
+is public at `:558`). No consumer could ever call them, so nothing was lost at
+any version.
 
-**BIND-6 — the raw `writeEnabled` re-export was removed.** It was present at
+The measurement was sound; the interpretation was not. The enumerator walked the
+**runtime** prototype chain, where TypeScript's `private` is erased, and the
+report treated "reachable at runtime" as "public API". Re-run with `.d.ts`
+classification, the core exposes **20 public members** and the old wrapper
+exposed exactly those 20 — **public dropped: 0**.
+
+So the case for the by-reference export is not recovered methods. It is:
+
+- a list cannot fall behind if there is no list — a public member added to the
+  core is reachable the moment it exists;
+- identity is preserved, so `this` binds and destructuring works;
+- and it is sound only because the class overrode no *behaviour*: all 20 members
+  were straight delegations (non-trivial bodies: 0).
+
+The exported type does not widen the privates either — `Omit<typeof LangsysApp,
+'init'> & {…}` is keyof-mapped, so calling one of the five is a compile error.
+
+Caught in review by checking the type boundary this file never consulted.
+
+**BIND-6 — the raw `writeEnabled` re-export was removed.****BIND-6 — the raw `writeEnabled` re-export was removed.** It was present at
 `src/index.ts:47`. Removed after review: it is the one signal that *needs*
 adapting, so BIND-6's re-export mandate excludes it, and offering it beside
 `useWriteEnabled()` handed callers a supported-looking way to defeat the
@@ -303,7 +316,7 @@ git show origin/main:docs/sdk-spec.mdx        # blob 06ae105a…, main @ 7bee50d
 
 # suite + types
 cd ~/Documents/dev/langsys-js-react
-npm run typecheck && npm test                 # 33 tests / 8 files
+npm run typecheck && npm test                 # see the Suite row above
 
 # probes (comment-stripped, with controls)
 python3 _dev_/conformance-probe.py

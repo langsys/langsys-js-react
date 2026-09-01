@@ -1,32 +1,35 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { LangsysApp as core } from 'langsys-js-typescript';
 import { LangsysApp } from './index.js';
 
 /**
- * Pins the binding's entry point against the core's, generated from the core
- * rather than from a list maintained here.
+ * Pins the binding's entry point against the core's PUBLIC surface, generated
+ * at test time rather than from a list maintained here — a hand-written
+ * expectation would reproduce in the verifier the defect it exists to catch.
  *
- * A hand-written wrapper listing each core method shipped five unreachable
- * methods in 0.6.7 — `applyAuthorization`, `findBestLocaleMatch`,
- * `getUserLanguagePreferences`, `parseAcceptLanguageHeader`, `resolveLocale`.
- * Nothing caught it because nothing compared the two surfaces; a list that has
- * fallen behind still typechecks and still passes every test written against
- * the members it does have.
+ * PUBLIC is decided by the `.d.ts`, not by the runtime chain. TypeScript's
+ * `private` is erased at runtime, so walking the prototype chain alone reports
+ * implementation detail as API. An earlier revision of this file did exactly
+ * that and concluded the previous wrapper had dropped five methods; all five
+ * were `private` in the core's `.d.ts` and were never reachable by any
+ * consumer. The wrapper dropped **zero** public members. See CONFORMANCE.md.
  *
- * So the reachability assertion below is DERIVED from the core's own member
- * list at test time. A test enumerating the expected members by hand would
- * reproduce the original defect in the verifier.
+ * What the identity export actually buys is not recovered methods — it is that
+ * no future public member can be missed, and that identity is preserved.
  */
 
-/** Every non-private callable/getter member reachable on an object's chain. */
+const require = createRequire(import.meta.url);
+
+/** Every member reachable on an object's chain — methods, getters and data. */
 function surfaceOf(target: object): string[] {
     const out = new Set<string>();
     let o: object | null = target;
     while (o && o !== Object.prototype) {
         for (const k of Object.getOwnPropertyNames(o)) {
             if (k === 'constructor' || k.startsWith('_')) continue;
-            const d = Object.getOwnPropertyDescriptor(o, k);
-            if (d && (typeof d.value === 'function' || d.get)) out.add(k);
+            out.add(k);
         }
         o = Object.getPrototypeOf(o);
     }
@@ -35,25 +38,31 @@ function surfaceOf(target: object): string[] {
 
 describe('LangsysApp surface', () => {
     const coreSurface = surfaceOf(core);
+    const dtsPath = realpathSync(require.resolve('langsys-js-typescript')).replace(/\.js$/, '.d.ts');
+    const privateNames = new Set(
+        [...readFileSync(dtsPath, 'utf8').matchAll(/^\s*private\s+([A-Za-z_]\w*)\s*;/gm)].map((m) => m[1]),
+    );
+    const publicSurface = coreSurface.filter((m) => !privateNames.has(m));
 
     it('positive control: the core exposes a substantial surface', () => {
         // Guards the generator itself. If this drops to a handful, `surfaceOf`
         // has stopped walking the chain and every reachability row below would
         // pass vacuously.
-        expect(coreSurface.length).toBeGreaterThan(10);
-        expect(coreSurface).toContain('init');
-        expect(coreSurface).toContain('t');
+        expect(publicSurface.length).toBeGreaterThan(10);
+        expect(publicSurface).toContain('init');
+        expect(publicSurface).toContain('t');
     });
 
-    it.each(['applyAuthorization', 'findBestLocaleMatch', 'getUserLanguagePreferences', 'parseAcceptLanguageHeader', 'resolveLocale'])(
-        'regression: %s is reachable (one of the five lost in 0.6.7)',
-        (name) => {
-            expect(typeof (LangsysApp as unknown as Record<string, unknown>)[name]).toBe('function');
-        },
-    );
+    it('positive control: the .d.ts classification actually excludes something', () => {
+        // If nothing is classified private, `publicSurface` is just the runtime
+        // walk and the rows below prove less than they appear to.
+        expect(privateNames.size).toBeGreaterThan(0);
+        expect(privateNames.has('resolveLocale')).toBe(true); // known private
+        expect(privateNames.has('getCountries')).toBe(false); // known public
+    });
 
-    it('every core member is reachable through the binding', () => {
-        const missing = coreSurface.filter(
+    it('every PUBLIC core member is reachable through the binding', () => {
+        const missing = publicSurface.filter(
             (m) => (LangsysApp as unknown as Record<string, unknown>)[m] === undefined,
         );
         expect(missing).toEqual([]);
@@ -66,7 +75,7 @@ describe('LangsysApp surface', () => {
     });
 
     it('members are identical references, not re-wrapped', () => {
-        for (const m of coreSurface) {
+        for (const m of publicSurface) {
             const a = (LangsysApp as unknown as Record<string, unknown>)[m];
             const b = (core as unknown as Record<string, unknown>)[m];
             expect(a).toBe(b);

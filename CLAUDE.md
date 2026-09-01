@@ -27,7 +27,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 The Svelte wrapper adapts a native store *into* the SDK (`writable` → `Signal`). The React wrapper does the mirror image: it adapts the SDK's signals *out* to React's render cycle, and supplies a `Signal`-shaped locale store on the input side.
 
-1. **`LangsysApp.init({ UserLocaleStore })`** — the wrapper class (`LangsysAppReact` in `index.ts`) accepts a `Signal<string>` for the user locale. Because React's locale store (`createLocaleStore`, an alias of the base SDK's `createSignal`) is *already* a `Signal`, `init` is a straight passthrough — no adapter needed. Every other `LangsysApp.*` method is a direct delegation.
+1. **`LangsysApp.init({ UserLocaleStore })`** — `LangsysApp` is the base SDK's singleton re-exported **by reference** (not a wrapper class), with `init` typed to take a `Signal<string>`. Because React's locale store is already a `Signal`, `init` is a straight passthrough. See the reasoning at the export site in `src/index.ts`.
 
 2. **Hooks (`useT`, `useCurrentLocale`, `useTranslations`)** — each wraps a base-SDK signal with `useSignal`, which is `useSyncExternalStore(signal.subscribe, signal.get, signal.get)`. The base SDK's `tSignal` re-emits a fresh `TFunction` closure on every translations/locale change (and a stable reference between changes), which is exactly the identity contract `useSyncExternalStore` needs — no tearing, no render loops. `useT()` returns the current `TFunction`; calling `t('Phrase', 'Cat', params?)` reads the current translation and the component re-renders when the signal changes.
 

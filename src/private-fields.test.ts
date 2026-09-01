@@ -12,10 +12,11 @@ import { LangsysApp } from './index.js';
  * forwarding layer throws `TypeError: Cannot read private member`, because
  * private access is keyed on the receiver identity, not on the property path.
  *
- * So this pins the constraint both ways: structurally, that we know whether
- * the core uses private fields at all; and behaviourally, that a real call
- * through our export reaches the core's internals. If anyone later swaps the
- * identity export for a Proxy, the behavioural half is what catches it.
+ * So this pins the constraint structurally — whether the core uses private
+ * fields at all, asserted as a concrete value so it reddens when that changes.
+ * A swap from identity export to a Proxy is caught by `surface.test.ts`'s
+ * identity assertion, NOT here: with no #private fields in the core today,
+ * nothing in this file can throw under a Proxy.
  */
 describe('private-field reachability', () => {
     const coreSource = readFileSync('node_modules/langsys-js-typescript/dist/index.js', 'utf8');
@@ -31,18 +32,24 @@ describe('private-field reachability', () => {
     });
 
     it('fixture negative control: bare # in CSS or a URL is not a private field', () => {
-        // The false positive a naive /#\w+/ scan produces, and the reason this
-        // file uses an anchored pattern instead.
-        const notPrivate = 'const c = "#ffffff"; const u = "https://x.dev/docs#anchor";';
+        // The false positive a naive /#\w+/ scan produces. Measured on this
+        // core: 2 naive matches, BOTH CSS hex colours (#e0005a, #fff) in a
+        // single string — no URL fragment, contrary to an earlier note here.
+        // A URL fragment is included below because it is the other shape a
+        // naive scan trips on, not because this core contains one.
+        const notPrivate = 'const c = "#e0005a"; const d = "#fff"; const u = "https://x.dev/docs#anchor";';
         expect(DECL.test(notPrivate)).toBe(false);
         expect(ACCESS.test(notPrivate)).toBe(false);
     });
 
-    it('records whether the core currently uses private fields', () => {
-        // Recorded, not asserted either way: the core is free to adopt them.
-        // What matters is that our export survives it, which the next test pins.
-        const usesPrivateFields = DECL.test(coreSource) && ACCESS.test(coreSource);
-        expect(typeof usesPrivateFields).toBe('boolean');
+    it('records the core\'s CURRENT private-field usage as a concrete value', () => {
+        // Asserted, not merely "is a boolean" — an earlier revision asserted
+        // typeof === 'boolean', which is true whatever the scan returns and so
+        // could not fail. Pinned to today's measured answer instead: if the core
+        // adopts #private fields this reddens, which is exactly when the
+        // behavioural half below starts mattering.
+        expect(DECL.test(coreSource)).toBe(false);
+        expect(ACCESS.test(coreSource)).toBe(false);
     });
 
     it('fixture: a NAIVE Proxy BREAKS private-field access — the control failing', () => {
@@ -85,8 +92,11 @@ describe('private-field reachability', () => {
     });
 
     it('behavioural: a real call through our export reaches core internals', () => {
-        // `detectPreferredLocale` reads the core's own state. Through a Proxy or
-        // a re-bound wrapper this is where a private-field read would throw.
+        // NOTE ON WHAT THIS DOES **NOT** CATCH. While the core has no #private
+        // fields, this row passes under `new Proxy(_LangsysApp, {})` too — a
+        // swap to a Proxy is caught by `surface.test.ts`'s identity assertion,
+        // not here. This row only becomes a Proxy detector once the core adopts
+        // private fields, which the scan above pins the moment it happens.
         expect(() => LangsysApp.detectPreferredLocale('en-US,en;q=0.9')).not.toThrow();
         const result = LangsysApp.detectPreferredLocale('en-US,en;q=0.9');
         expect(result === false || typeof result === 'string').toBe(true);

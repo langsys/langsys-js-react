@@ -2,8 +2,8 @@
  * langsys-js-react — idiomatic React binding over `langsys-js-typescript`.
  *
  * Public API:
- *   - `LangsysApp` — `init` accepts a `Signal<string>` (make one with
- *     `createLocaleStore`) for the user locale; every other method delegates.
+ *   - `LangsysApp` — the core singleton by reference, with `init` typed to
+ *     accept a `Signal<string>` (make one with `createLocaleStore`).
  *   - Hooks — `useT`, `useCurrentLocale`, `useTranslations`, `useLocaleStore`,
  *     and the low-level `useSignal`. These are the reactive layer; in components
  *     prefer them over the raw signals.
@@ -128,26 +128,32 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
  * React SDK entry point — the core singleton itself, re-exported **by
  * reference**, with `init` narrowed to the React-flavoured config.
  *
- * This deliberately is NOT a wrapper class. The previous implementation listed
- * each core method and delegated it, which meant any method nobody remembered
- * to add was unreachable through this binding while existing on the core —
- * silently, with a green typecheck and a green suite, because nothing compares
- * the two surfaces. Five methods were lost that way and shipped in 0.6.7:
- * `applyAuthorization`, `findBestLocaleMatch`, `getUserLanguagePreferences`,
- * `parseAcceptLanguageHeader` and `resolveLocale`. Vue and Solid independently
- * lost the same five to the same shape.
+ * This is deliberately not a wrapper class. The previous implementation listed
+ * each core method and delegated it; a list like that goes stale silently,
+ * because a member nobody adds is simply absent and absence raises nothing.
  *
- * Exporting the singleton itself removes the failure mode rather than patching
- * it: there is no list to fall out of date, so a method added to the core is
- * reachable here the moment it exists. That is only sound because this binding
- * overrides no *behaviour* — every member of the old class was a straight
- * delegation — so the sole thing that needed expressing was a type.
+ * **What that wrapper actually cost, stated accurately:** it exposed all 20 of
+ * the core's public members — it dropped **zero** public API. An earlier
+ * revision of this comment claimed it had dropped five methods and that they
+ * were missing for consumers of 0.6.7. That was wrong. The five
+ * (`applyAuthorization`, `getUserLanguagePreferences`,
+ * `parseAcceptLanguageHeader`, `findBestLocaleMatch`, `resolveLocale`) are
+ * declared `private` in the core's `.d.ts`, so no consumer could ever call
+ * them. The measurement that produced the claim walked the runtime prototype
+ * chain, where TypeScript's `private` has been erased.
+ *
+ * So the argument for this shape is not recovered methods. It is that a list
+ * cannot fall behind if there is no list: a public member added to the core is
+ * reachable here the moment it exists, and identity is preserved, so `this`
+ * binds correctly and destructuring keeps working. That is only sound because
+ * this binding overrides no *behaviour* — every member of the removed class was
+ * a straight delegation — so the sole thing needing expression was a type.
  *
  * The type narrows `init` to require a `Signal<string>` for `UserLocaleStore`.
- * The core accepts the broader `LocaleSource`, which `Signal<string>` satisfies,
- * so this is a narrowing for React callers and not a divergence. Identity is
- * preserved: `LangsysApp` here **is** the core's `LangsysApp`, so `this` binds
- * correctly and there is no forwarding layer to get wrong.
+ * The core accepts the broader `LocaleSource`, which `Signal<string>`
+ * satisfies, so this is a narrowing for React callers and not a divergence.
+ * Because the type is `Omit<typeof _LangsysApp, 'init'> & {…}` — keyof-mapped —
+ * it does not widen the core's private members: calling one is a compile error.
  *
  * Pinned by `src/surface.test.ts`.
  */
