@@ -11,7 +11,17 @@ In a traditional SSR flow:
 
 ## The solution
 
-Pass pre-fetched translations from server to client using the `initialTranslations` config option. The client SDK uses them as-is and skips the initial fetch. Because the hooks are built on `useSyncExternalStore` with a server snapshot, the first paint already reflects the seeded translations.
+Pass pre-fetched translations from server to client using the `initialTranslations` config option. The client SDK uses them as-is and skips the initial fetch.
+
+> **Read this before the walkthrough — what `initialTranslations` does and does not fix.**
+>
+> `init()` runs in an effect, so it is client-only, and in the App Router a Client Component and a Server Component hold **separate module instances** of the SDK. Measured against `langsys-js-react@0.6.7` on Next 16, production build:
+>
+> - **The server-rendered HTML for a Client Component is NOT translated.** It contains base-locale text. A crawler that does not execute JS sees the base language, and this is true at one request with no concurrency — it is not a race.
+> - **Translations become correct after hydration**, once `init()` resolves. That took 405–490ms in my probe, because the seed sits behind a network `validate()` call inside `init()`. The number is environment-specific; the ordering is not.
+> - **The gap is a flash, and it is not always base copy.** The catalog is persisted to `localStorage` without a locale tag, so a returning visitor sees the *previously viewed language* until `init()` resolves — measured ~180–240ms of French on a German page after navigating FR→DE.
+>
+> So `initialTranslations` fixes the duplicate fetch and makes the page correct after hydration. It does **not** give you server-rendered translated markup, and therefore does not give you SEO. For crawler-visible translated copy in the App Router, see [Server-rendered copy](#server-rendered-copy-app-router) below.
 
 ## Next.js — App Router
 
@@ -109,6 +119,47 @@ export function Hero() {
 }
 ```
 
+<a id="server-rendered-copy-app-router"></a>
+
+## Server-rendered copy (App Router)
+
+`initialTranslations` cannot put translated text in the served HTML — `init()` is client-only and the Server Component graph holds a different SDK module instance. For copy a crawler must see, translate it in the Server Component itself, with a **pure function** that takes the catalog and locale as arguments and touches no module state:
+
+```tsx
+// lib/pureT.ts
+import { interpolate } from 'langsys-js-typescript';
+import type { iCategories, TranslationParams } from 'langsys-js-react';
+
+export function makeCatalogT(catalog: iCategories, locale: string) {
+    return function t(phrase: string, category = '', params?: TranslationParams) {
+        const hit = (catalog as any)?.[category || '__uncategorized__']?.[phrase];
+        const out = hit ?? phrase;
+        return params ? interpolate(out, params, locale) : out;
+    };
+}
+```
+
+```tsx
+// app/[locale]/page.tsx  (Server Component)
+export default async function Page({ params }) {
+    const { locale } = await params;
+    const catalog = await getTranslations(locale);
+    const t = makeCatalogT(catalog, locale);
+
+    return <h1>{t('Welcome back', 'Home')}</h1>;   // in the served bytes
+}
+```
+
+Measured on Next 16, production build, `langsys-js-react@0.6.7`: `curl` of a localized route returns genuinely translated body copy, ICU plural rules intact (`interpolate` is the SDK's own pure helper), and 8 locales × 10 rounds fired concurrently gave 80/80 correct with zero cross-request bleed.
+
+It is concurrency-safe **by construction** — the catalog is an argument, so there is no shared state to race and no module graph to be on the wrong side of.
+
+> **Do not instead seed the global stores from a Server Component.** Calling `sTranslations.set()` / `currentlyLoadedLocale.set()` in a Server Component appears to work — the value reads back correctly in that graph — but the Client Components that call `useT()` are in a different graph and never see it. Measured: 100% of non-base locales rendered base content, at one request with no concurrency.
+>
+> This is worth stating separately because it **fails a concurrency test**. A harness that checks for cross-request contamination reports zero bleed, since every response is uniformly wrong in the same way. To catch it, compare each response against its own expected content, not against the other responses.
+
+Use the pure function for crawler-visible copy and `initialTranslations` for the interactive client tree. They are different jobs, not alternatives.
+
 ## Next.js — Pages Router
 
 ```tsx
@@ -151,6 +202,22 @@ export async function getServerSideProps() {
 }
 ```
 
+> **Pages Router can remove the flash entirely, and the App Router cannot.** In the Pages Router the seed and the read happen in the same module graph, so seeding **during render** — synchronously in `_app`, from `pageProps` — beats first paint:
+>
+> ```tsx
+> export default function App({ Component, pageProps }: AppProps) {
+>     if (pageProps.translations) {
+>         sTranslations.set(pageProps.translations);          // during render, not in an effect
+>         currentlyLoadedLocale.set(pageProps.locale);
+>     }
+>     return <Component {...pageProps} />;
+> }
+> ```
+>
+> Measured: with a stale French catalog in `localStorage`, loading a German route showed `Hallo` at 42ms and every sample thereafter — no French frame, and no hydration mismatch. The `init()`-in-`useEffect` form above does not achieve this, because the stale paint has already happened by the time the effect runs.
+>
+> **This placement is safe here and unsafe on the server.** The rule is that the seed and every read must sit in one uninterrupted render pass. On the client there is one request, so it always holds. During SSR it holds only while nothing suspends in between — put an `await` between the seed and a `t()` read and concurrent requests bleed into each other (measured 70/80 wrong under `renderToPipeableStream` with a suspending child; 0/80 with a synchronous tree at the same witnessed concurrency).
+
 ## Locale switching
 
 Update the store from the same `useLocaleStore` call; the SDK reacts and fetches the new locale's translations:
@@ -187,14 +254,14 @@ export function LocaleSwitcher() {
 
 ### Performance
 - No duplicate API calls (server + client).
-- Translations ready immediately on hydration.
 - Faster Time to Interactive (TTI).
 - Reduced API usage and costs.
 
 ### User experience
-- No flash of untranslated content.
-- Instant translation display.
-- Better SEO with server-rendered translations.
+- Correct translations from the first render **after hydration**.
+- In the Pages Router, seeding during render removes the flash entirely (see below).
+
+> **Not claimed, because it was measured otherwise.** This pattern does not give the App Router "no flash of untranslated content" or "better SEO with server-rendered translations" — a Client Component's server HTML carries base-locale text regardless of `initialTranslations`, and the flash lasts until `init()` resolves. Use the [pure catalog function](#server-rendered-copy-app-router) for copy that must be in the served bytes.
 
 ### Developer experience
 - Simple configuration.
