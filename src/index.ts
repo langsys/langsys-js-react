@@ -50,6 +50,12 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
 export { canonicalizeLocale } from 'langsys-js-typescript';
 
+// Pure interpolation helper. Re-exported because the App Router pattern in
+// README-SSR.md translates inside Server Components, where the hooks cannot
+// run — and `langsys-js-typescript` is a plain dependency of this package, not
+// a peer, so a consumer importing it directly breaks under pnpm / Yarn PnP.
+export { interpolate } from 'langsys-js-typescript';
+
 // API client (vanilla — no React concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 

@@ -267,7 +267,9 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 
 ## Server-Side Rendering (Next.js, Remix)
 
-The SDK is SSR-compatible. The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration. `useT` and friends are built on `useSyncExternalStore` with a server snapshot, so they hydrate without a flash of untranslated content when seeded.
+The SDK is SSR-compatible. The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
+
+> **That seeding does not make the server-rendered HTML translated.** `init()` runs in an effect, so it is client-only, and in the Next App Router a Client Component and a Server Component hold separate SDK module instances. A Client Component's server HTML carries base-locale text, and the translations appear after hydration — so this pattern fixes the duplicate fetch, not SEO, and it does not remove the flash. For copy that must be in the served bytes, translate it in the Server Component with a pure function (`makeCatalogT`, in the SSR guide). In the Pages Router, seeding during render removes the flash entirely.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete Next.js (App Router & Pages Router) walkthrough.
 

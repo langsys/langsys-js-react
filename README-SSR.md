@@ -127,13 +127,17 @@ export function Hero() {
 
 ```tsx
 // lib/pureT.ts
-import { interpolate } from 'langsys-js-typescript';
+import { interpolate } from 'langsys-js-react';
 import type { iCategories, TranslationParams } from 'langsys-js-react';
 
 export function makeCatalogT(catalog: iCategories, locale: string) {
     return function t(phrase: string, category = '', params?: TranslationParams) {
         const hit = (catalog as any)?.[category || '__uncategorized__']?.[phrase];
-        const out = hit ?? phrase;
+        // Match the SDK's own guard exactly. A bare `hit ?? phrase` would render
+        // an empty-string entry as '' here while the client renders the source
+        // phrase, and would pass a non-string entry (content blocks, direct
+        // tokens) straight through to React.
+        const out = typeof hit === 'string' && hit.length > 0 ? hit : phrase;
         return params ? interpolate(out, params, locale) : out;
     };
 }
@@ -141,7 +145,7 @@ export function makeCatalogT(catalog: iCategories, locale: string) {
 
 ```tsx
 // app/[locale]/page.tsx  (Server Component)
-export default async function Page({ params }) {
+export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
     const catalog = await getTranslations(locale);
     const t = makeCatalogT(catalog, locale);
@@ -150,13 +154,18 @@ export default async function Page({ params }) {
 }
 ```
 
-Measured on Next 16, production build, `langsys-js-react@0.6.7`: `curl` of a localized route returns genuinely translated body copy, ICU plural rules intact (`interpolate` is the SDK's own pure helper), and 8 locales × 10 rounds fired concurrently gave 80/80 correct with zero cross-request bleed.
+Measured on Next 16, production build, `langsys-js-react@0.6.7`: `curl` of a localized route returns genuinely translated body copy, ICU plural rules intact (`interpolate` is the SDK's own pure helper), and 8 locales × 10 rounds fired concurrently gave 80/80 correct — every response checked against its own expected locale.
 
 It is concurrency-safe **by construction** — the catalog is an argument, so there is no shared state to race and no module graph to be on the wrong side of.
 
 > **Do not instead seed the global stores from a Server Component.** Calling `sTranslations.set()` / `currentlyLoadedLocale.set()` in a Server Component appears to work — the value reads back correctly in that graph — but the Client Components that call `useT()` are in a different graph and never see it. Measured: 100% of non-base locales rendered base content, at one request with no concurrency.
 >
 > This is worth stating separately because it **fails a concurrency test**. A harness that checks for cross-request contamination reports zero bleed, since every response is uniformly wrong in the same way. To catch it, compare each response against its own expected content, not against the other responses.
+
+> **Two limits to know before you reach for it.**
+>
+> 1. **It is not `t()`.** The signature is `t(phrase, category?, params?)` — it does not support the SDK's `t('Hello, {name}!', { name })` two-argument form, and it has no compile-time param checking. Keep it for Server Components; use `useT()` everywhere else.
+> 2. **It does not register missing tokens.** The SDK's `t()` reports an unknown phrase back to Langsys so it appears in your project for translation. This one cannot — it has no client and no network. **Copy that renders _only_ in a Server Component will never be discovered, and so will never be translated.** Make sure every phrase you pass through it also appears somewhere the real `t()` or `<Translate>` sees it, or add it to the project by hand.
 
 Use the pure function for crawler-visible copy and `initialTranslations` for the interactive client tree. They are different jobs, not alternatives.
 
@@ -204,12 +213,19 @@ export async function getServerSideProps() {
 
 > **Pages Router can remove the flash entirely, and the App Router cannot.** In the Pages Router the seed and the read happen in the same module graph, so seeding **during render** — synchronously in `_app`, from `pageProps` — beats first paint:
 >
+> This goes **alongside** the `init()` call above, not instead of it — `init()` is what registers the locale subscriber, token discovery and validation. Add the seed to the same `App`:
+>
 > ```tsx
+> import { LangsysApp, sTranslations, currentlyLoadedLocale } from 'langsys-js-react';
+>
 > export default function App({ Component, pageProps }: AppProps) {
+>     const locale = pageProps.locale ?? 'en';
 >     if (pageProps.translations) {
 >         sTranslations.set(pageProps.translations);          // during render, not in an effect
->         currentlyLoadedLocale.set(pageProps.locale);
+>         currentlyLoadedLocale.set(locale);
+>         LangsysApp.Translations.markLoaded(locale);         // else init() refetches what you just seeded
 >     }
+>     useEffect(() => { LangsysApp.init({ /* …as above… */ }); }, []);
 >     return <Component {...pageProps} />;
 > }
 > ```
@@ -258,8 +274,8 @@ export function LocaleSwitcher() {
 - Reduced API usage and costs.
 
 ### User experience
-- Correct translations from the first render **after hydration**.
-- In the Pages Router, seeding during render removes the flash entirely (see below).
+- Correct translations once `init()` resolves, shortly after hydration (not on the first render after it — see the note at the top of this guide).
+- In the Pages Router, seeding during render removes the flash entirely ([see above](#nextjs--pages-router)).
 
 > **Not claimed, because it was measured otherwise.** This pattern does not give the App Router "no flash of untranslated content" or "better SEO with server-rendered translations" — a Client Component's server HTML carries base-locale text regardless of `initialTranslations`, and the flash lasts until `init()` resolves. Use the [pure catalog function](#server-rendered-copy-app-router) for copy that must be in the served bytes.
 
@@ -302,18 +318,19 @@ Look for:
 ## Troubleshooting
 
 ### Translations not appearing
+- **If the page looks right in the browser but `curl` / View Source shows base-locale text, that is expected and not a bug in your setup** — a Client Component's server HTML is never translated. See [Server-rendered copy](#server-rendered-copy-app-router).
 - Check that `initialTranslationsLocale` matches the `UserLocaleStore` value at init.
 - Verify the translations payload matches the `iCategories` shape.
 - Enable `debug: true` and look for the messages above.
 
 ### Still seeing duplicate API calls
 - Confirm both `initialTranslations` *and* `initialTranslationsLocale` are passed.
-- Confirm init runs before any rendering that calls `t(...)`.
+- ~~Confirm init runs before any rendering that calls `t(...)`.~~ Not achievable in this pattern: `init()` runs in a `useEffect`, so it is always after the first render. If you need translated output before that, seed during render (Pages Router) or use the pure function (App Router).
 - Confirm the locale hasn't drifted between server and client.
 
 ### Hydration mismatch warnings
 - Make sure the `locale` you seed on the server matches the initial value you pass to `useLocaleStore` on the client.
-- Keep `LangsysApp.init` inside `useEffect` (client-only) so the server render and the first client render agree.
+- Keep `LangsysApp.init` inside `useEffect` (client-only) so the server render and the first client render agree. This does **not** conflict with the Pages Router render-time seed above: there `_app` runs on both the server and the client and seeds identically on each, so the two renders still agree — measured with no hydration mismatch.
 
 ### TypeScript errors on `t()`
 - Placeholders are compile-time-checked: `t('Hello, {name}!', 'Cat')` *requires* a params object with `name`. Either add the key or remove the placeholder.

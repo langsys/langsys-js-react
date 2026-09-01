@@ -1,6 +1,10 @@
 
 ## 0.6.8 - unreleased
 
+### Added
+
+- **`interpolate` is now re-exported.** The App Router recipe in `README-SSR.md` needs it inside Server Components, and `langsys-js-typescript` is a plain dependency of this package rather than a peer — so `import { interpolate } from 'langsys-js-typescript'` resolves on npm's flat `node_modules` by hoisting accident and **fails under pnpm, Yarn PnP or `--no-hoist`**. Reproduced both ways before fixing. Matches the existing rule that consumers shouldn't reach into the base SDK.
+
 ### Docs
 
 - **`README-SSR.md` corrected against measurement.** It claimed "the first paint already reflects the seeded translations", "no flash of untranslated content" and "better SEO with server-rendered translations". None of those hold in the App Router: `init()` is client-only and Server/Client Components hold separate SDK module instances, so a Client Component's server HTML carries base-locale text at one request with no concurrency. Translations become correct only after hydration (405–490ms in the probe, because the seed sits behind `init()`'s network `validate()`), and for a returning visitor the gap shows the *previously viewed language* rather than base copy, since the catalog is persisted without a locale tag.
