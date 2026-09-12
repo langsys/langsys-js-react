@@ -48,10 +48,13 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 
 // `writeEnabled` is deliberately NOT re-exported by reference. Do not add it.
 //
-// The three signals above are SSR-safe: `initialTranslations` seeds them before
-// the server render, so reading them raw is legitimate advanced use.
-// `writeEnabled` is the opposite — it is browser-authoritative and *defined* as
-// `undefined` for the whole of a server render. `useWriteEnabled()` exists to
+// The three signals above CAN hold a value during a server render — the core's
+// synchronous `seedCatalog()` puts a catalog in place before rendering — so
+// reading them raw is a legitimate advanced use. (Not "safe" without caveat:
+// they are process-global, so concurrent requests in different locales share
+// them — spec SRV-2, recorded not implemented in CONFORMANCE.md.)
+// `writeEnabled` differs in kind, not degree — it is browser-authoritative and
+// *defined* as `undefined` for the whole of a server render, so no seed exists. `useWriteEnabled()` exists to
 // adapt exactly that, pinning `getServerSnapshot` so the server can never emit
 // capability-dependent markup. Re-exporting the raw signal alongside the adapted
 // one would hand callers a supported-looking way to defeat the pin while
@@ -59,7 +62,7 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 //
 // BIND-6 mandates re-exporting by reference everything that does NOT need
 // adapting; this signal is the one that does, so the mandate excludes it.
-// The capability is not withheld — `langsys-js-typescript` is a peer dependency
+// The capability is not withheld — `langsys-js-typescript` is a regular dependency of this package (installed transitively)
 // and an advanced consumer can import the raw signal from the core directly, on
 // their own judgement. This binding simply declines to bless that path under its
 // own name. Absence is pinned by `src/write-enabled-surface.test.ts`.
@@ -144,10 +147,17 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
  *
  * So the argument for this shape is not recovered methods. It is that a list
  * cannot fall behind if there is no list: a public member added to the core is
- * reachable here the moment it exists, and identity is preserved, so `this`
- * binds correctly and destructuring keeps working. That is only sound because
- * this binding overrides no *behaviour* — every member of the removed class was
- * a straight delegation — so the sole thing needing expression was a type.
+ * reachable here the moment it exists, and identity is preserved. That is only
+ * sound because this binding overrides no *behaviour* — every member of the
+ * removed class was a straight delegation — so the sole thing needing
+ * expression was a type.
+ *
+ * Destructuring behaves exactly as it does on the core, because this IS the
+ * core. `const { t } = LangsysApp` is safe — `t` is a getter returning a
+ * closure. Prototype methods are not: `const { refresh } = LangsysApp` detaches
+ * the receiver and the call throws, on the core and here alike. Call methods on
+ * `LangsysApp` itself. (An earlier revision of this comment claimed destructuring
+ * "keeps working"; it does not for methods.)
  *
  * The type narrows `init` to require a `Signal<string>` for `UserLocaleStore`.
  * The core accepts the broader `LocaleSource`, which `Signal<string>`

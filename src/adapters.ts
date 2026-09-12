@@ -8,9 +8,15 @@ import { createSignal, type Signal } from 'langsys-js-typescript';
  * This is the React mirror of Svelte's `$store` auto-subscription. Where the
  * Svelte wrapper adapts a native store *into* the SDK (`writable` → `Signal`),
  * the React wrapper adapts the SDK's signals *out* to the render cycle. It is
- * built on `useSyncExternalStore`, so it is concurrent-safe and SSR-safe — the
- * server snapshot reads the same `.get()`, which the base SDK seeds from
- * `initialTranslations` during SSR.
+ * built on `useSyncExternalStore`, so it is concurrent-safe: a render never
+ * observes two different values of the same signal (no tearing). On the
+ * server, the snapshot reads the signal's current value — whatever has been
+ * seeded into it (the core's synchronous `seedCatalog()`), or nothing. Those
+ * signals are process-global, so concurrent server requests share them;
+ * that is spec SRV-2, recorded `not implemented` in CONFORMANCE.md. An
+ * earlier revision called this SSR-safe on the grounds that
+ * `initialTranslations` seeds them during SSR; the documented pattern calls
+ * `init()` in `useEffect`, which never runs on the server.
  *
  * The base SDK's signals are stable between changes (every `set` replaces the
  * value, so `.get()` returns a fresh reference only after a real change). That

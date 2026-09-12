@@ -34,7 +34,7 @@ describe('writeEnabled is deliberately not re-exported', () => {
         expect(react).not.toHaveProperty('writeEnabled');
     });
 
-    it('still re-exports the SSR-safe raw signals, so this is a targeted omission', () => {
+    it('still re-exports the other raw signals, so this is a targeted omission', () => {
         // The distinction being encoded: these three are seeded by
         // `initialTranslations` before a server render and are safe to read raw.
         // Losing them would mean the omission was overzealous rather than aimed.

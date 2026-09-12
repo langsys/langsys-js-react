@@ -84,11 +84,29 @@ describe('LangsysApp surface', () => {
         }
     });
 
-    it('survives destructuring — forwarding is unbound', () => {
-        // A Proxy or wrapper that binds `this` at property access breaks here.
-        // Identity export cannot, and this pins that it stays that way.
-        const { detectPreferredLocale } = LangsysApp;
-        expect(typeof detectPreferredLocale).toBe('function');
-        expect(detectPreferredLocale).toBe(core.detectPreferredLocale);
+    it('destructuring semantics are exactly the core\'s: `t` is safe, methods lose `this`', () => {
+        // An earlier row here was named "survives destructuring" and asserted
+        // only `typeof` and identity — it never CALLED the destructured function,
+        // so it stayed green while the method it named threw a TypeError.
+        //
+        // What is actually true, measured by calling:
+        //   - `t` is a getter returning a closure, so destructuring it captures a
+        //     callable function that needs no receiver.
+        //   - prototype methods read `this`, so destructuring detaches them and
+        //     the call throws.
+        // By-reference export changes neither: the binding IS the core, so its
+        // destructuring behaviour is the core's exactly — including the core's
+        // limitation. Adapting that would mean binding every method, i.e. a
+        // forwarding layer, which BIND-6 says to avoid where nothing needs it.
+        const { t } = LangsysApp;
+        expect(typeof t('Hello', 'UI')).toBe('string');
+
+        const { detectPreferredLocale: fromBinding } = LangsysApp;
+        const { detectPreferredLocale: fromCore } = core;
+        expect(() => fromBinding('en-US')).toThrow(TypeError);
+        expect(() => fromCore('en-US')).toThrow(TypeError); // identical on the core
+
+        // Called on the receiver, it works — which is the supported form.
+        expect(() => LangsysApp.detectPreferredLocale('en-US')).not.toThrow();
     });
 });
