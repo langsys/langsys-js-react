@@ -18,13 +18,13 @@ Computed from the status table below, not hand-counted.
 
 | Status | Rows |
 |---|---|
-| `delegated` | 63 |
+| `delegated` | 62 |
 | `implemented` | 9 |
-| `not implemented` | 6 |
+| `not implemented` | 7 |
 | `n/a (profile: server)` | 1 |
 | **total** | **79** |
 
-**Not green, honestly.** Six rows are `not implemented`: SRV-1..5, which bind this binding whenever it renders inside a server request scope (Next, Remix), and MARK-1, whose SSR route carries no identity. All six wait on the operator's open ruling on where server-render capture and request-scoped catalogs live — the JS Server adapters or the bindings. Per dispatch, no SRV behaviour is built here until that ruling.
+**Not green, honestly.** Seven rows are `not implemented`, closing on two different conditions. **Six wait on the operator's ruling** on where server-render capture and request-scoped catalogs live — the JS Server adapters or the bindings: SRV-1..5, which bind this binding whenever it renders inside a server request scope (Next, Remix), and MARK-1, whose SSR route carries no identity. Per dispatch, no SRV behaviour is built until that ruling. **One waits on a core rule:** HINT-4, a known non-capture for the stable-element layout shape, which the spec's own note says stays recorded until the navigation entry point lands.
 ## Scope
 
 A **binding**: it inherits the browser core's profile and adds nothing of its own, so most rules are the core's to satisfy. Rows therefore take one of three shapes:
@@ -63,7 +63,7 @@ A **binding**: it inherits the browser core's profile and adds nothing of its ow
 | HINT-1 | delegated | - | Core row HINT-1: `implemented` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
 | HINT-2 | n/a (profile: server) | - | Profiles line is `server` only; it excludes every profile this file claims (browser, binding, all). Expires if that line gains a browser or binding clause. |
 | HINT-3 | delegated | - | Core row HINT-3: `provisional` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
-| HINT-4 | delegated | - | Core row HINT-4: `provisional` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
+| HINT-4 | not implemented | - | **Known non-capture, recorded as the spec directs.** HINT-4's own note (blob `5c5c0723`) says the per-URL cap assumes re-entry and that a persistent layout does not re-enter: "a binding in that shape records it as such until the navigation entry point lands, which is the rule that closes it." Measured here: a layout held as a stable element reference (module-level, or `children` pass-through) does **not** re-enter `t()` on a client-side route change — layout 0, page 1 (`src/route-reentry.test.tsx`). React bails out on an identical element reference, so no URL is captured for the new route and the report is absent rather than suppressed. The ordinary re-render shape does re-enter (2 of 2). This row would otherwise delegate to core row HINT-4: `provisional` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`). **Closing condition:** the navigation entry point. Not fixable in this binding without overriding React's bail-out, which BIND-1 forbids. |
 | HINT-5 | delegated | - | Core row HINT-5: `provisional` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
 | HINT-6 | delegated | - | Core row HINT-6: `implemented` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
 | HINT-7 | delegated | - | Core row HINT-7: `provisional` in langsys-js-typescript@f58e0c4 CONFORMANCE (graded there against blob `8e2527b9`, not `5c5c0723`). Absence probe `HINT` → **0** hits; firing control `createElement` → **6**. |
@@ -121,6 +121,7 @@ A **binding**: it inherits the browser core's profile and adds nothing of its ow
 
 Recorded as corrections, not silent edits. This revision's:
 
+- **HINT-4, `delegated` → `not implemented`.** The stable-element re-entry non-capture was filed under Routed findings as a core-side item while HINT-4 itself was graded `delegated`. HINT-4's own note at `5c5c0723` directs a binding in that shape to record it under HINT-4 until the navigation entry point lands. Raised by the Reviewer for fleet consistency; the spec text was verified against the blob before regrading.
 - **GATE-2 was mis-mapped, `provisional` → `delegated`.** GATE-2 governs collecting always and choosing the lane at the send site, holding on unknown — core behaviour. The v7 row cited `useWriteEnabled`'s rendered tri-state, which is not what the rule governs.
 - **BIND-5 was mis-mapped, `partial` → `implemented`.** BIND-5 is only "a binding does not cache lookup results". The v7 row hung the stable-element route re-entry gap on it; that gap is discovery completeness, not caching, and is now under Routed findings.
 - **CID-1..4 carried two rows with conflicting grades** — a `CID-*` wildcard graded `provisional` and a `CID-1..4` row graded `delegated`. Now one row per id, `delegated`.
@@ -136,7 +137,7 @@ Earlier corrections, carried from the v7 file: the five-site `canonicalizeLocale
 
 Not graded against this binding; each has an owner.
 
-- **Stable-element route re-entry — core-side.** A layout held as a stable element reference (module-level, or `children` pass-through) does not re-enter `t()` on a client-side route change: React bails out on an identical element reference. Measured layout 0, page 1 (`src/route-reentry.test.tsx`). Since the core re-records discovery per URL, phrases rendered only by that layout are never credited to the new URL. Not fixable here without overriding React's bail-out, which is the binding implementing behaviour rather than delegating it (BIND-1). In the TS design queue.
+- **Stable-element route re-entry — graded under HINT-4.** Recorded there as the known non-capture HINT-4's note directs, not here and not under BIND-5 or GATE-7. It closes when the navigation entry point lands.
 - **SRV-1..5 and MARK-1's SSR route — operator.** Where server-render capture and request-scoped catalogs live is undecided. The six rows flip on that ruling.
 - **Release wave — dependency range.** `package.json` declares `langsys-js-typescript: "^0.6.5"` and the lockfile resolves the **pre-838 registry `0.6.5`**; development runs through the symlink. The core's `package.json` still reads `0.6.5` while its changelog intends `0.7.0`. In the release wave this range MUST be bumped to the core version that actually ships 838, and both suites re-run against the registry tarball — the symlinked `dist/` bypasses the `files` allowlist, the `exports` map and publint.
 
