@@ -12,11 +12,9 @@ import { createSignal, type Signal } from 'langsys-js-typescript';
  * observes two different values of the same signal (no tearing). On the
  * server, the snapshot reads the signal's current value — whatever has been
  * seeded into it (the core's synchronous `seedCatalog()`), or nothing. Those
- * signals are process-global, so concurrent server requests share them;
- * that is spec SRV-2, recorded `not implemented` in CONFORMANCE.md. An
- * earlier revision called this SSR-safe on the grounds that
- * `initialTranslations` seeds them during SSR; the documented pattern calls
- * `init()` in `useEffect`, which never runs on the server.
+ * signals are process-global, so concurrent server requests share them
+ * (spec SRV-2, recorded `not implemented` in CONFORMANCE.md). `init()` in a
+ * `useEffect` never runs on the server, so it seeds nothing there.
  *
  * The base SDK's signals are stable between changes (every `set` replaces the
  * value, so `.get()` returns a fresh reference only after a real change). That

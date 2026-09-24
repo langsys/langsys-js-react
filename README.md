@@ -267,7 +267,32 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 | `createLocaleStore(initial?)` | `(s?: string) => Signal<string>` | Make a user-locale store outside React (module scope). |
 | `t` / `currentlyLoadedLocale` / `sTranslations` | `Signal<…>` | Raw signals for direct subscription outside React. In components, prefer the hooks. |
 | `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to the lowercase wire form (`'en-US'` → `'en-us'`) — the same normalization the SDK applies internally. |
+| `useNotifyNavigation(location)` | `(location: unknown) => void` | Tells the SDK the route changed whenever `location` changes. See [Route changes](#route-changes). |
 | `useWriteEnabled()` | `() => boolean \| undefined` | Whether this session may register content, as decided by the server. See [Write gating](#write-gating) — the `undefined` state is meaningful. |
+
+## Route changes
+
+Call `useNotifyNavigation` once, anywhere under your router, with the router's current location:
+
+```tsx
+import { useNotifyNavigation } from 'langsys-js-react';
+
+// React Router
+function NavigationNotifier() {
+    useNotifyNavigation(useLocation().key);
+    return null;
+}
+
+// Next.js App Router
+function NavigationNotifier() {
+    useNotifyNavigation(usePathname() + '?' + useSearchParams());
+    return null;
+}
+```
+
+Content that stays mounted across a route change — a header, a sidebar, a persistent layout — is not re-rendered by React when only the route changes, so without this the SDK never learns that its phrases now appear on the new page, and discovery never credits that page with them. The hook tells the SDK the route changed; every mounted translated node then looks itself up again at the new URL. Everything else — what is reported, when, and how often — is decided by the SDK.
+
+If your router exposes its own after-navigation callback, calling `notifyNavigation()` there is equivalent.
 
 ## Write gating
 

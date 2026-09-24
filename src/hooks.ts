@@ -1,5 +1,5 @@
-import { useState, useSyncExternalStore } from 'react';
-import { currentlyLoadedLocale, sTranslations, tSignal, writeEnabled } from 'langsys-js-typescript';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { currentlyLoadedLocale, notifyNavigation, sTranslations, tSignal, writeEnabled } from 'langsys-js-typescript';
 import type { Signal, TFunction, iCategories } from 'langsys-js-typescript';
 import { createLocaleStore, useSignal } from './adapters.js';
 
@@ -88,4 +88,30 @@ const writeEnabledServerSnapshot = (): undefined => undefined;
  */
 export function useWriteEnabled(): boolean | undefined {
     return useSyncExternalStore(writeEnabled.subscribe, writeEnabled.get, writeEnabledServerSnapshot);
+}
+
+/**
+ * Tell the SDK the route changed, whenever `location` changes. Call it once, anywhere under
+ * your router, with the router's current location:
+ *
+ *   // React Router
+ *   useNotifyNavigation(useLocation().key);
+ *   // Next.js App Router
+ *   useNotifyNavigation(usePathname() + '?' + useSearchParams());
+ *
+ * Why it exists: content that stays mounted across a route change — a persistent layout, a
+ * header — is never re-rendered by React when only the route changes, because React skips
+ * a subtree whose element is unchanged. Nothing then calls back into the SDK, so the new
+ * page is never credited with that content. `notifyNavigation()` makes every mounted
+ * translated node look itself up again at the new URL. This hook only times that call; the
+ * SDK decides everything else (spec HINT-13).
+ *
+ * This package cannot know which router an app uses, so it takes the router's location as a
+ * plain value instead of importing any router. Calling `notifyNavigation` directly from a
+ * router's own after-navigation hook is equivalent.
+ */
+export function useNotifyNavigation(location: unknown): void {
+    useEffect(() => {
+        notifyNavigation();
+    }, [location]);
 }

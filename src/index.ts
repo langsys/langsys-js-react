@@ -5,7 +5,7 @@
  *   - `LangsysApp` — the core singleton by reference, with `init` typed to
  *     accept a `Signal<string>` (make one with `createLocaleStore`).
  *   - Hooks — `useT`, `useCurrentLocale`, `useTranslations`, `useLocaleStore`,
- *     and the low-level `useSignal`. These are the reactive layer; in components
+ *     `useWriteEnabled`, `useNotifyNavigation`, and the low-level `useSignal`. These are the reactive layer; in components
  *     prefer them over the raw signals.
  *   - `createLocaleStore` — make the user-locale store (React analog of Svelte's
  *     `writable`).
@@ -54,16 +54,16 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 // they are process-global, so concurrent requests in different locales share
 // them — spec SRV-2, recorded not implemented in CONFORMANCE.md.)
 // `writeEnabled` differs in kind, not degree — it is browser-authoritative and
-// *defined* as `undefined` for the whole of a server render, so no seed exists. `useWriteEnabled()` exists to
-// adapt exactly that, pinning `getServerSnapshot` so the server can never emit
+// *defined* as `undefined` for the whole of a server render, so no seed exists.
+// `useWriteEnabled()` exists to adapt exactly that, pinning `getServerSnapshot` so the server can never emit
 // capability-dependent markup. Re-exporting the raw signal alongside the adapted
 // one would hand callers a supported-looking way to defeat the pin while
 // implying the two are interchangeable.
 //
 // BIND-6 mandates re-exporting by reference everything that does NOT need
 // adapting; this signal is the one that does, so the mandate excludes it.
-// The capability is not withheld — `langsys-js-typescript` is a regular dependency of this package (installed transitively)
-// and an advanced consumer can import the raw signal from the core directly, on
+// The capability is not withheld — `langsys-js-typescript` is a regular
+// dependency of this package, installed transitively, and an advanced consumer can import the raw signal from the core directly, on
 // their own judgement. This binding simply declines to bless that path under its
 // own name. Absence is pinned by `src/write-enabled-surface.test.ts`.
 
@@ -72,6 +72,11 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 // alias for `LangsysApp.setWriteGrant`; both re-authorize and resolve when the
 // server has answered.
 export { setWriteGrant } from 'langsys-js-typescript';
+
+// Route change — re-exported by reference. Call it from your router's after-navigation hook,
+// or use the `useNotifyNavigation` hook, so content that stays mounted across routes is
+// credited to the new page (spec HINT-13).
+export { notifyNavigation } from 'langsys-js-typescript';
 
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
@@ -83,7 +88,7 @@ export { LangsysAppAPI } from 'langsys-js-typescript';
 
 // Hooks + adapters (the React-idiomatic reactive layer)
 export { createLocaleStore, useSignal } from './adapters.js';
-export { useCurrentLocale, useLocaleStore, useT, useTranslations, useWriteEnabled } from './hooks.js';
+export { useCurrentLocale, useLocaleStore, useNotifyNavigation, useT, useTranslations, useWriteEnabled } from './hooks.js';
 
 // Components
 export { Translate, type TranslateProps } from './components/Translate.js';
@@ -129,41 +134,23 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
 
 /**
  * React SDK entry point — the core singleton itself, re-exported **by
- * reference**, with `init` narrowed to the React-flavoured config.
+ * reference**, with `init` typed to take the React-flavoured config.
  *
- * This is deliberately not a wrapper class. The previous implementation listed
- * each core method and delegated it; a list like that goes stale silently,
- * because a member nobody adds is simply absent and absence raises nothing.
+ * There is no wrapper and no list of delegated methods, so every public member
+ * of the core is reachable here the moment it exists, and identity is
+ * preserved: `LangsysApp` here **is** the core's `LangsysApp`. This binding
+ * overrides no behaviour, so the only thing it needs to express is a type.
  *
- * **What that wrapper actually cost, stated accurately:** it exposed all 20 of
- * the core's public members — it dropped **zero** public API. An earlier
- * revision of this comment claimed it had dropped five methods and that they
- * were missing for consumers of 0.6.7. That was wrong. The five
- * (`applyAuthorization`, `getUserLanguagePreferences`,
- * `parseAcceptLanguageHeader`, `findBestLocaleMatch`, `resolveLocale`) are
- * declared `private` in the core's `.d.ts`, so no consumer could ever call
- * them. The measurement that produced the claim walked the runtime prototype
- * chain, where TypeScript's `private` has been erased.
- *
- * So the argument for this shape is not recovered methods. It is that a list
- * cannot fall behind if there is no list: a public member added to the core is
- * reachable here the moment it exists, and identity is preserved. That is only
- * sound because this binding overrides no *behaviour* — every member of the
- * removed class was a straight delegation — so the sole thing needing
- * expression was a type.
- *
- * Destructuring behaves exactly as it does on the core, because this IS the
- * core. `const { t } = LangsysApp` is safe — `t` is a getter returning a
- * closure. Prototype methods are not: `const { refresh } = LangsysApp` detaches
- * the receiver and the call throws, on the core and here alike. Call methods on
- * `LangsysApp` itself. (An earlier revision of this comment claimed destructuring
- * "keeps working"; it does not for methods.)
+ * Destructuring behaves exactly as on the core. `const { t } = LangsysApp` is
+ * safe — `t` is a getter returning a closure. Prototype methods are not:
+ * `const { refresh } = LangsysApp` detaches the receiver and the call throws.
+ * Call methods on `LangsysApp` itself.
  *
  * The type narrows `init` to require a `Signal<string>` for `UserLocaleStore`.
  * The core accepts the broader `LocaleSource`, which `Signal<string>`
- * satisfies, so this is a narrowing for React callers and not a divergence.
- * Because the type is `Omit<typeof _LangsysApp, 'init'> & {…}` — keyof-mapped —
- * it does not widen the core's private members: calling one is a compile error.
+ * satisfies. Because the type is `Omit<typeof _LangsysApp, 'init'> & {…}` —
+ * keyof-mapped — it does not expose the core's private members: calling one is
+ * a compile error.
  *
  * Pinned by `src/surface.test.ts`.
  */

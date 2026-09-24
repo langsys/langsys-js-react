@@ -15,7 +15,7 @@ Usage: python3 _dev_/family-probes.py [--json OUT]   exit 1 if any control is ze
 """
 import glob, json, re, sys
 
-SRC = sorted(f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f)
+SRC = sorted(f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f and '/test-helpers/' not in f)
 assert len(SRC) >= 6, f'read {len(SRC)} source files; expected >= 6 — probes would report false zeros'
 
 def strip(text):

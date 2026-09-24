@@ -13,6 +13,7 @@
   - **`setWriteGrant(grant)`** → `Promise<void>`, also on `LangsysApp`. For login-walled apps: supply a short-lived JWT after `init()` and the session is re-authorized with an `X-Write-Grant` header. It re-authorizes rather than only storing the token.
   - **`writeGrant`** init option, inherited from the base config type. Prefer the function form — grants are short-lived and a static string expires while the app is still mounted.
   - **`WriteGrant`** type re-exported. The raw **`writeEnabled`** signal is deliberately *not* re-exported: it is the one signal that needs adapting, since it is `undefined` for the whole of a server render, and re-exporting it alongside `useWriteEnabled()` would offer a supported-looking way to defeat the hydration guard. Advanced consumers can import it from `langsys-js-typescript` directly.
+- **`useNotifyNavigation(location)`** and **`notifyNavigation()`** (re-exported by reference). Content that stays mounted across a route change — a persistent layout, a header — is not re-rendered by React when only the route changes, so the SDK never learns its phrases now appear on the new page. Pass the router's location to the hook (React Router's `useLocation().key`, Next's `usePathname()`), and every mounted translated node looks itself up again at the new URL.
 - **E2E testbed** (`example/Testbed.tsx` + `example/e2e/write-gating.mjs`, `npm run test:e2e`) — drives a real browser against a live API and asserts on captured request payloads *and* response status.
 
 ### Fixed

@@ -1,5 +1,5 @@
 import re, glob, sys, json
-SRC = [f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f]
+SRC = [f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f and '/test-helpers/' not in f]
 EX  = [f for f in glob.glob('example/**/*.tsx', recursive=True)] + glob.glob('example/e2e/*.mjs')
 def strip(t):
     t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
