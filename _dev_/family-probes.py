@@ -41,11 +41,16 @@ FAMILIES = {
     'ICU':   (r'\binterpolate\b|\bisICU\b|IntlMessageFormat|\bplural\b|\bselectordinal\b', r'\bTFunction\b'),
     'CID':   (r'generateCustomId|\bmd5\b|createHash|\bsha1\b', r'\bcustom_id\b'),
     'TOK':   (r'tokenizeElement|TreeWalker|\bchildNodes\b|\bnodeType\b|aria-label|data-tooltip', r'\bcreateElement\b'),
-    'MARK2': (r'data-langsys-|getAttribute\(|querySelector|\.closest\(', r'PHRASE_MARKER_ATTR'),
+    'MARK':  (r'data-langsys-|getAttribute\(|querySelector|\.closest\(', r'PHRASE_MARKER_ATTR'),
+    'RESOLVED': (r'resolved|RESOLVED_MARKER|parentElement|\.closest\(', r'\bnew Vanilla(Translate|Phrase)\b'),
     'SSR':   (r'ssrTokenStrategy|typeof window|\bisSSR\b', r'useSyncExternalStore'),
     'GRANT': (r'X-Write-Grant|resolveWriteGrant|\bwriteGrant\s*[:=]|Authorization', r'\bsetWriteGrant\b'),
     'CACHE': (r'new Map\(|new WeakMap\(|\bcache\b|localStorage', r'\buseState\b'),
     'OBS':   (r'console\.(warn|error|log)|\blogger\b', r'\buseEffect\b'),
+    'MSG':   (r'\.(message|template|params|code)\b|fillTemplate|templateMarkers|messagesCategory|[\'"]Errors[\'"]', r'\brenderServerMessage\b'),
+    'MIG':   (r'[Ll]egacy|[Mm]igrat|i18next|trans_choice|\bkeyMode\b', r'\buseT\b'),
+    'SNAP':  (r'(?<!Server)[Ss]napshot|seedCatalog|initialTranslations', r'\bLangsysApp\b'),
+    'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|AsyncLocalStorage|\bVary\b', r'\buseSyncExternalStore\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),
 }
 

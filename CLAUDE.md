@@ -14,10 +14,12 @@ It is the React sibling of [`langsys-js-svelte`](https://github.com/langsys/lang
 src/
     index.ts                  # public exports — LangsysApp wrapper, hooks, Translate, raw signals, type re-exports
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
-    hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore
-    components/
-        Translate.tsx         # React thin wrapper around langsys-js-typescript's vanilla DOM Translate class
-    index.test.ts             # smoke coverage for the locale-store adapter
+    hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
+    components/               # Translate / Phrase / DontTranslate — mount/destroy glue over the core's DOM classes
+    test-helpers/             # contract-fixture launcher for *.contract.test.tsx
+    *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
+contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
+vectors/                      # shared vector files, vendored byte-exact from langsys-js-typescript — never edit
 example/                      # Vite playground (npm run dev) — not published
 ```
 

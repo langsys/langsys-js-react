@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, createElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
+import { LangsysApp, Phrase, Translate, createLocaleStore, useT } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
 
 /**
@@ -110,6 +110,25 @@ describe('GATE-10 — a resolved subtree records no miss, read through this bind
         await until(async () => (await accepted()).includes('Phrase {m0o}control{m0c} text'));
         await sleep(900);
         expect(await accepted()).not.toContain('Phrase {m0o}resolved{m0c} text');
+        await done();
+    });
+
+    // Negative control. A bare t() is not a reader: its argument is source text from the app's
+    // code, with no subtree of its own, so it records its miss even when the component calling
+    // it renders inside a resolved subtree. (GATE-9 is what governs t(); this project leaves it off.)
+    it('useT() under a resolved ancestor still registers, beside a <Translate> there that does not', async () => {
+        function BareT() {
+            return el('span', null, useT()('Bare t under resolved', 'UI'));
+        }
+        const done = await render(
+            el('div', { 'data-ls-resolved': 'es-es' },
+                el(BareT),
+                el(Translate, { category: 'UI' }, 'Sibling block under resolved'),
+            ),
+        );
+        await until(async () => (await accepted()).includes('Bare t under resolved'));
+        await sleep(900);
+        expect(await has('Sibling block under resolved')).toBe(false);
         await done();
     });
 });
