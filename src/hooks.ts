@@ -1,6 +1,13 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { currentlyLoadedLocale, notifyNavigation, sTranslations, tSignal, writeEnabled } from 'langsys-js-typescript';
-import type { Signal, TFunction, iCategories } from 'langsys-js-typescript';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+    currentlyLoadedLocale,
+    notifyNavigation,
+    renderServerMessage,
+    sTranslations,
+    tSignal,
+    writeEnabled,
+} from 'langsys-js-typescript';
+import type { ServerMessage, Signal, TFunction, iCategories } from 'langsys-js-typescript';
 import { createLocaleStore, useSignal } from './adapters.js';
 
 /**
@@ -114,4 +121,26 @@ export function useNotifyNavigation(location: unknown): void {
     useEffect(() => {
         notifyNavigation();
     }, [location]);
+}
+
+/**
+ * A function that renders server message entries, re-rendering the calling component whenever
+ * translations or the loaded locale change:
+ *
+ *   const render = useRenderServerMessage();
+ *   const entries = resolveServerMessages(responseBody);
+ *   return <ul>{entries.map((e, i) => <li key={i}>{render(e)}</li>)}</ul>;
+ *
+ * It is the SDK's `renderServerMessage` and decides nothing itself: the entry's template is
+ * looked up under the messages category (`messagesCategory` in `init`, `Errors` by default) and
+ * filled from its params, and the entry's `message` is shown when the catalog has no
+ * translation for it (spec MSG-5). The returned function changes identity exactly when a
+ * lookup could give a different answer, so it can be depended on in memos and effects.
+ */
+export function useRenderServerMessage(): (entry: ServerMessage, category?: string) => string {
+    const t = useT();
+    // `t` is the dependency on purpose: it changes whenever the catalog or locale does, which
+    // is when a render must be redone. The core reads the current catalog itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(() => (entry: ServerMessage, category?: string) => renderServerMessage(entry, category), [t]);
 }

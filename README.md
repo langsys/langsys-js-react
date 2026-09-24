@@ -268,6 +268,7 @@ Renders the host with `translate="no"`, which the base SDK's tokenizer and rende
 | `t` / `currentlyLoadedLocale` / `sTranslations` | `Signal<…>` | Raw signals for direct subscription outside React. In components, prefer the hooks. |
 | `canonicalizeLocale(locale)` | `(s: string) => string` | Normalize a locale identifier to the lowercase wire form (`'en-US'` → `'en-us'`) — the same normalization the SDK applies internally. |
 | `useNotifyNavigation(location)` | `(location: unknown) => void` | Tells the SDK the route changed whenever `location` changes. See [Route changes](#route-changes). |
+| `useRenderServerMessage()` | `() => (entry, category?) => string` | Renders server message entries, re-rendering when the locale changes. See [Server messages](#server-messages). |
 | `useWriteEnabled()` | `() => boolean \| undefined` | Whether this session may register content, as decided by the server. See [Write gating](#write-gating) — the `undefined` state is meaningful. |
 
 ## Route changes
@@ -293,6 +294,47 @@ function NavigationNotifier() {
 Content that stays mounted across a route change — a header, a sidebar, a persistent layout — is not re-rendered by React when only the route changes, so without this the SDK never learns that its phrases now appear on the new page, and discovery never credits that page with them. The hook tells the SDK the route changed; every mounted translated node then looks itself up again at the new URL. Everything else — what is reported, when, and how often — is decided by the SDK.
 
 If your router exposes its own after-navigation callback, calling `notifyNavigation()` there is equivalent.
+
+## Server messages
+
+A Langsys-aware server reports a failure as a list of entries, each `{ field?, code, message, template, params? }`. `template` is the source sentence, `params` fills its `{markers}`, `message` is the same sentence already filled, and `code` is a stable slug for your logic (highlight a field, retry) — never for choosing text.
+
+`resolveServerMessages(body)` finds the entries in a response body wherever they sit; `useRenderServerMessage()` renders them in the current locale:
+
+```tsx
+import { resolveServerMessages, useRenderServerMessage } from 'langsys-js-react';
+
+function FormErrors({ body }: { body: unknown }) {
+    const render = useRenderServerMessage();
+    return (
+        <ul>
+            {resolveServerMessages(body).map((entry, i) => (
+                <li key={i}>{render(entry)}</li>
+            ))}
+        </ul>
+    );
+}
+```
+
+An entry renders as the translation of its `template`, filled from `params`, when the catalog has one, and as its `message` otherwise — so a message nobody has translated yet still reads correctly. `message` is never used as a lookup key. Templates are looked up under one category, `Errors` unless `messagesCategory` is set in `init`, and it has to match the category the server registers them under. The rendering function changes identity whenever the catalog or locale does, so it can be passed to memoised children.
+
+If your API has its own error body, point `resolveServerMessages(body, { key: 'data.failures' })` at the node holding the entries, or pass `{ resolver }` to map native failures to entries.
+
+### Inertia
+
+After a failed form, the server SDK flashes the entries and shares them with the page it redirects to as a prop (`langsys_errors` in the Laravel package, unless configured otherwise). Render them from the page's props:
+
+```tsx
+import { usePage } from '@inertiajs/react';
+
+function CardsNew() {
+    const { langsys_errors } = usePage().props;
+    const render = useRenderServerMessage();
+    return resolveServerMessages(langsys_errors).map((entry, i) => <p key={i}>{render(entry)}</p>);
+}
+```
+
+A page that follows no failure has no such prop, and renders nothing.
 
 ## Write gating
 

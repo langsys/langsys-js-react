@@ -54,6 +54,7 @@ useTranslations()       -> iCategories      // raw catalog
 useLocaleStore(initial?) -> [locale, setLocale, Signal<string>]
 useWriteEnabled()       -> boolean | undefined  // server-decided write capability; TRI-STATE, see below
 useNotifyNavigation(loc) -> void           // calls notifyNavigation() when the router's location changes (HINT-13)
+useRenderServerMessage() -> (entry, category?) => string  // core renderServerMessage, identity tied to useT() (MSG-5)
 useSignal(signal)       -> T               // low-level Signal → value bridge
 
 // Store factory + raw signals (advanced / direct subscription)
@@ -68,6 +69,9 @@ canonicalizeLocale(locale)   // re-exported BCP 47 normalizer — LOWERCASES ('e
 // Access it through useWriteEnabled(); advanced consumers can import the raw signal
 // from langsys-js-typescript directly.
 notifyNavigation()           // re-exported by reference; a route change re-enters mounted translated nodes (HINT-13)
+resolveServerMessages(body, {key?, resolver?}) / renderServerMessage(entry, category?)  // by reference (MSG-1, MSG-5)
+SERVER_MESSAGE_CODES, DEFAULT_SERVER_MESSAGE_CATEGORY  // by reference; types ServerMessage, ResolveServerMessagesOptions
+messagesCategory             // init option, inherited from the base config type (default 'Errors', MSG-6)
 setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
 writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
 

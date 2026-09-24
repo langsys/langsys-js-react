@@ -5,7 +5,7 @@
  *   - `LangsysApp` — the core singleton by reference, with `init` typed to
  *     accept a `Signal<string>` (make one with `createLocaleStore`).
  *   - Hooks — `useT`, `useCurrentLocale`, `useTranslations`, `useLocaleStore`,
- *     `useWriteEnabled`, `useNotifyNavigation`, and the low-level `useSignal`. These are the reactive layer; in components
+ *     `useWriteEnabled`, `useNotifyNavigation`, `useRenderServerMessage`, and the low-level `useSignal`. These are the reactive layer; in components
  *     prefer them over the raw signals.
  *   - `createLocaleStore` — make the user-locale store (React analog of Svelte's
  *     `writable`).
@@ -19,6 +19,8 @@ import {
     type ExtractParamKeys,
     type ParamPrimitive,
     type ParamsFor,
+    type ResolveServerMessagesOptions,
+    type ServerMessage,
     type Signal,
     type TArgs,
     type TFunction,
@@ -78,6 +80,16 @@ export { setWriteGrant } from 'langsys-js-typescript';
 // credited to the new page (spec HINT-13).
 export { notifyNavigation } from 'langsys-js-typescript';
 
+// Server messages — re-exported by reference. `resolveServerMessages` finds the entries in a
+// response body or an Inertia page prop; `renderServerMessage` renders one (spec MSG-1, MSG-5).
+// In components, `useRenderServerMessage` re-renders them when the locale changes.
+export {
+    DEFAULT_SERVER_MESSAGE_CATEGORY,
+    SERVER_MESSAGE_CODES,
+    renderServerMessage,
+    resolveServerMessages,
+} from 'langsys-js-typescript';
+
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
@@ -88,7 +100,15 @@ export { LangsysAppAPI } from 'langsys-js-typescript';
 
 // Hooks + adapters (the React-idiomatic reactive layer)
 export { createLocaleStore, useSignal } from './adapters.js';
-export { useCurrentLocale, useLocaleStore, useNotifyNavigation, useT, useTranslations, useWriteEnabled } from './hooks.js';
+export {
+    useCurrentLocale,
+    useLocaleStore,
+    useNotifyNavigation,
+    useRenderServerMessage,
+    useT,
+    useTranslations,
+    useWriteEnabled,
+} from './hooks.js';
 
 // Components
 export { Translate, type TranslateProps } from './components/Translate.js';
@@ -101,6 +121,8 @@ export type {
     ExtractParamKeys,
     ParamPrimitive,
     ParamsFor,
+    ResolveServerMessagesOptions,
+    ServerMessage,
     Signal,
     TArgs,
     TFunction,
