@@ -51,7 +51,8 @@ FAMILIES = {
     # Re-exporting the core's LegacyFormatError / LegacyKeyFile is not participation; resolving,
     # converting or rewriting the option would be.
     'MIG':   (r'legacyKeys\s*[:=]|setLegacyKeys\(|convertLegacy|createLegacyKeys|[Mm]igrat|i18next|trans_choice|\{\{', r'\buseT\b'),
-    'SNAP':  (r'(?<!Server)[Ss]napshot|seedCatalog|initialTranslations', r'\bLangsysApp\b'),
+    # Re-exporting SnapshotError / CatalogSnapshot is not participation; loading, parsing or seeding would be.
+    'SNAP':  (r'loadSnapshot\(|parseSnapshot|buildSnapshot|snapshotChecksum|seedCatalog|initialTranslations\s*[:=]', r'\bLangsysApp\b'),
     'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|AsyncLocalStorage|\bVary\b', r'\buseSyncExternalStore\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),
 }

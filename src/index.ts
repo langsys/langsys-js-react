@@ -16,6 +16,7 @@
 
 import {
     LangsysApp as _LangsysApp,
+    type CatalogSnapshot,
     type ExtractParamKeys,
     type LegacyKeyFile,
     type ParamPrimitive,
@@ -96,6 +97,11 @@ export {
 // The error class is re-exported so an app can catch an unreadable file by type (spec MIG-7).
 export { LegacyFormatError } from 'langsys-js-typescript';
 
+// Catalog snapshots — load one with `LangsysApp.loadSnapshot(snapshot, locale?)` before the first
+// render. The error class is re-exported so an app can catch a refused file by type; its
+// `reason` names why (spec SNAP-2, SNAP-3).
+export { SnapshotError } from 'langsys-js-typescript';
+
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
@@ -124,6 +130,7 @@ export { DontTranslate, type DontTranslateProps } from './components/DontTransla
 // Type re-exports — these are framework-agnostic, so consumers can rely on them
 // directly without reaching into `langsys-js-typescript`.
 export type {
+    CatalogSnapshot,
     ExtractParamKeys,
     LegacyKeyFile,
     ParamPrimitive,

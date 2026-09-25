@@ -356,6 +356,19 @@ t('checkout.title', undefined, { name: 'Ada' }); // "Checkout for Ada" — regis
 
 `t()` then resolves its argument as a key first. A key the files hold becomes its value, converted to Langsys placeholders and ICU plurals, and that value — never the key — is the phrase Langsys registers and translates; the key's first segment is its category unless the call passes one. An argument the files do not hold is literal source text. Formats are `i18next`, `vue-i18n` and `plain` (the default); any other makes `init` throw a `LegacyFormatError` naming the file. Leave `legacyKeys` unset and `t()` does no key lookup at all. `LangsysApp.Translations.setLegacyKeys(files | null)` turns the mode on or off later.
 
+## Catalog snapshots
+
+A snapshot is a project's catalog exported to a file, so a first paint or an offline session renders translations with no API call. Load it before the first render:
+
+```tsx
+import snapshot from './langsys-snapshot.json';
+
+LangsysApp.loadSnapshot(snapshot, 'es-es'); // synchronous; false if it holds no catalog for the locale
+createRoot(el).render(<App />);             // the first render already has its translations
+```
+
+The snapshot is a cache, not the catalog of record: `init()` still fetches the catalog, which replaces it and supplies any phrase it lacked, and with no network anything it lacks shows its source text. Never edit a snapshot by hand — export it again. An edited file, a different format, an unsupported version or a missing member is refused with a `SnapshotError` whose `reason` says which.
+
 ## Write gating
 
 A write-capable key shipped in public JavaScript is extractable, so **public keys are read-only**. The server decides per session whether that session may register newly-discovered phrases, and the SDK follows that decision — you never compute it client-side, because the same key can be write-enabled from one IP and read-only from another.
