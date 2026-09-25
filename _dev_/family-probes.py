@@ -48,7 +48,9 @@ FAMILIES = {
     'CACHE': (r'new Map\(|new WeakMap\(|\bcache\b|localStorage', r'\buseState\b'),
     'OBS':   (r'console\.(warn|error|log)|\blogger\b', r'\buseEffect\b'),
     'MSG':   (r'\.(message|template|params|code)\b|fillTemplate|templateMarkers|messagesCategory|[\'"]Errors[\'"]', r'\brenderServerMessage\b'),
-    'MIG':   (r'[Ll]egacy|[Mm]igrat|i18next|trans_choice|\bkeyMode\b', r'\buseT\b'),
+    # Re-exporting the core's LegacyFormatError / LegacyKeyFile is not participation; resolving,
+    # converting or rewriting the option would be.
+    'MIG':   (r'legacyKeys\s*[:=]|setLegacyKeys\(|convertLegacy|createLegacyKeys|[Mm]igrat|i18next|trans_choice|\{\{', r'\buseT\b'),
     'SNAP':  (r'(?<!Server)[Ss]napshot|seedCatalog|initialTranslations', r'\bLangsysApp\b'),
     'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|AsyncLocalStorage|\bVary\b', r'\buseSyncExternalStore\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),

@@ -10,8 +10,8 @@ Format-valid is NOT green: green also needs zero partial / not implemented / hel
 import re, sys
 from collections import Counter
 
-BLOB = 'e22dad188f1c1e6a972961cdf9675a84d891f5ec'
-REV_ROW = f'| **Spec revision read** | langsys2 c1b16560…, docs/sdk-spec.mdx blob {BLOB} |'
+BLOB = '33bbc4095ef2d13a55926b71045a7094f6b9706a'
+REV_ROW = f'| **Spec revision read** | langsys2 9b23f3d8…, docs/sdk-spec.mdx blob {BLOB} |'
 PROFILE_ROW = '| **Profiles** | browser, binding, all — derived: binding over langsys-js-typescript |'
 CLAIMED = {'browser', 'binding', 'all'}
 STATUSES = re.compile(r'^(implemented|provisional|delegated|partial|not implemented|held \(strip ruling\)|waived|'

@@ -17,6 +17,7 @@
 import {
     LangsysApp as _LangsysApp,
     type ExtractParamKeys,
+    type LegacyKeyFile,
     type ParamPrimitive,
     type ParamsFor,
     type ResolveServerMessagesOptions,
@@ -90,6 +91,11 @@ export {
     resolveServerMessages,
 } from 'langsys-js-typescript';
 
+// Legacy-key migration — the mode itself is the `legacyKeys` init option (inherited from the
+// core's config) or `LangsysApp.Translations.setLegacyKeys`; `t()` / `useT()` pass through it unchanged.
+// The error class is re-exported so an app can catch an unreadable file by type (spec MIG-7).
+export { LegacyFormatError } from 'langsys-js-typescript';
+
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
@@ -119,6 +125,7 @@ export { DontTranslate, type DontTranslateProps } from './components/DontTransla
 // directly without reaching into `langsys-js-typescript`.
 export type {
     ExtractParamKeys,
+    LegacyKeyFile,
     ParamPrimitive,
     ParamsFor,
     ResolveServerMessagesOptions,

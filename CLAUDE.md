@@ -74,6 +74,7 @@ notifyNavigation()           // re-exported by reference; a route change re-ente
 resolveServerMessages(body, {key?, resolver?}) / renderServerMessage(entry, category?)  // by reference (MSG-1, MSG-5)
 SERVER_MESSAGE_CODES, DEFAULT_SERVER_MESSAGE_CATEGORY  // by reference; types ServerMessage, ResolveServerMessagesOptions
 messagesCategory             // init option, inherited from the base config type (default 'Errors', MSG-6)
+legacyKeys                   // init option, inherited: legacy-key mode (MIG); LangsysApp.Translations.setLegacyKeys(files|null); LegacyFormatError + LegacyKeyFile re-exported
 setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
 writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
 

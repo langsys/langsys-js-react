@@ -336,6 +336,26 @@ function CardsNew() {
 
 A page that follows no failure has no such prop, and renders nothing.
 
+## Migrating from key-based i18n
+
+An app moving from i18next or vue-i18n can keep calling `t()` with its existing keys. Give `init` the source-language files it already has:
+
+```tsx
+import en from './locales/en.json';
+
+LangsysApp.init({
+    projectid,
+    key,
+    UserLocaleStore: store,
+    legacyKeys: [{ name: 'en.json', format: 'i18next', data: en }],
+});
+
+const t = useT();
+t('checkout.title', undefined, { name: 'Ada' }); // "Checkout for Ada" — registered as "Checkout for {name}" under "checkout"
+```
+
+`t()` then resolves its argument as a key first. A key the files hold becomes its value, converted to Langsys placeholders and ICU plurals, and that value — never the key — is the phrase Langsys registers and translates; the key's first segment is its category unless the call passes one. An argument the files do not hold is literal source text. Formats are `i18next`, `vue-i18n` and `plain` (the default); any other makes `init` throw a `LegacyFormatError` naming the file. Leave `legacyKeys` unset and `t()` does no key lookup at all. `LangsysApp.Translations.setLegacyKeys(files | null)` turns the mode on or off later.
+
 ## Write gating
 
 A write-capable key shipped in public JavaScript is extractable, so **public keys are read-only**. The server decides per session whether that session may register newly-discovered phrases, and the SDK follows that decision — you never compute it client-side, because the same key can be write-enabled from one IP and read-only from another.
