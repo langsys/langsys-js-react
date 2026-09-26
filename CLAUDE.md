@@ -16,7 +16,7 @@ src/
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
     components/               # Translate / Phrase / DontTranslate — mount/destroy glue over the core's DOM classes
-    test-helpers/             # contract-fixture launcher for *.contract.test.tsx
+    test-helpers/             # contract-fixture launcher; SSR RequestAdapter harness (ssr-scope.ts)
     *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
 contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
 vectors/                      # shared vector files, vendored byte-exact from langsys-js-typescript — never edit
