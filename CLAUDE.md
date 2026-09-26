@@ -71,8 +71,8 @@ canonicalizeLocale(locale)   // re-exported BCP 47 normalizer — LOWERCASES ('e
 // Access it through useWriteEnabled(); advanced consumers can import the raw signal
 // from langsys-js-typescript directly.
 notifyNavigation()           // re-exported by reference; a route change re-enters mounted translated nodes (HINT-13)
-resolveServerMessages(body, {key?, resolver?}) / renderServerMessage(entry, category?)  // by reference (MSG-1, MSG-5)
-SERVER_MESSAGE_CODES, DEFAULT_SERVER_MESSAGE_CATEGORY  // by reference; types ServerMessage, ResolveServerMessagesOptions
+resolveServerMessages(body, {key | resolver, pieces?}) / renderServerMessage(entry, category?)  // by reference (MSG-1, MSG-5); key or resolver is required — no default body search
+DEFAULT_SERVER_MESSAGE_CATEGORY  // by reference; types ServerMessage, ResolveServerMessagesOptions, ServerMessagePieces
 messagesCategory             // init option, inherited from the base config type (default 'Errors', MSG-6)
 LangsysApp.loadSnapshot(snapshot, locale?)  // core's synchronous loader, by reference (SNAP-2/3); SnapshotError + CatalogSnapshot re-exported
 legacyKeys                   // init option, inherited: legacy-key mode (MIG); LangsysApp.Translations.setLegacyKeys(files|null); LegacyFormatError + LegacyKeyFile re-exported

@@ -23,6 +23,7 @@ import {
     type ParamsFor,
     type ResolveServerMessagesOptions,
     type ServerMessage,
+    type ServerMessagePieces,
     type Signal,
     type TArgs,
     type TFunction,
@@ -82,12 +83,12 @@ export { setWriteGrant } from 'langsys-js-typescript';
 // credited to the new page (spec HINT-13).
 export { notifyNavigation } from 'langsys-js-typescript';
 
-// Server messages — re-exported by reference. `resolveServerMessages` finds the entries in a
-// response body or an Inertia page prop; `renderServerMessage` renders one (spec MSG-1, MSG-5).
+// Server messages — re-exported by reference. `resolveServerMessages` reads the entries from
+// where the server attached them (a configured `key`, or an app `resolver`) in a response body or
+// an Inertia page's props; `renderServerMessage` renders one (spec MSG-1, MSG-5).
 // In components, `useRenderServerMessage` re-renders them when the locale changes.
 export {
     DEFAULT_SERVER_MESSAGE_CATEGORY,
-    SERVER_MESSAGE_CODES,
     renderServerMessage,
     resolveServerMessages,
 } from 'langsys-js-typescript';
@@ -137,6 +138,7 @@ export type {
     ParamsFor,
     ResolveServerMessagesOptions,
     ServerMessage,
+    ServerMessagePieces,
     Signal,
     TArgs,
     TFunction,

@@ -7,7 +7,8 @@
  * HTTP. The server here stands in for the server SDK's half, which langsys-php-laravel proves
  * against Inertia's own middleware: a failed POST flashes the entries and redirects, and the
  * next page load shares them under `langsys_errors` (that package's default key) and drops
- * them afterwards. A page that follows no failure carries no such prop.
+ * them afterwards. The page reads them from its props through that same key, as configured on
+ * the server. A page that follows no failure carries no such prop.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -26,8 +27,9 @@ import { until } from './test-helpers/contract-fixture.js';
 
 const vectors = JSON.parse(
     readFileSync(resolve(__dirname, '../vectors/server-message-vectors.json'), 'utf8'),
-) as { canonical_entries: ServerMessage[] };
-const [, , tooShort, mismatch] = vectors.canonical_entries;
+) as { canonical_entries: Array<ServerMessage & { template: string; message: string }> };
+// Laravel's own messages, as its server SDK attaches them: `min.string` and `in`.
+const [, tooShort, mismatch] = vectors.canonical_entries;
 const PROP = 'langsys_errors';
 
 let flashed: ServerMessage[] | null = null;
@@ -70,7 +72,7 @@ function handle(req: IncomingMessage, res: ServerResponse) {
 function CardsNew() {
     const props = usePage().props as Record<string, unknown>;
     const render = useRenderServerMessage();
-    const entries = resolveServerMessages(props[PROP]);
+    const entries = resolveServerMessages(props, { key: PROP });
     return createElement(
         'ul',
         { id: 'errors' },
@@ -92,7 +94,7 @@ beforeAll(async () => {
         Errors: {
             __category__: 'Errors',
             __symbol__: 'Errors',
-            [tooShort.template]: 'La contraseña debe tener al menos {min} caracteres.',
+            [tooShort.template]: 'El campo contraseña debe tener al menos {min} caracteres.',
         },
     };
     sTranslations.set(categories as never);
@@ -128,7 +130,7 @@ describe('MSG-12 Inertia hand-off', () => {
             router.post(`${base}/cards`, { cc_number: '' });
         });
         await until(() => items().length > 0, 5000);
-        expect(items()).toEqual(['La contraseña debe tener al menos 12 caracteres.', mismatch.message]);
+        expect(items()).toEqual(['El campo contraseña debe tener al menos 12 caracteres.', mismatch.message]);
     });
 
     it('the entries are gone once the next page load no longer carries them', async () => {

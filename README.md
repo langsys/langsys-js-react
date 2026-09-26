@@ -297,9 +297,9 @@ If your router exposes its own after-navigation callback, calling `notifyNavigat
 
 ## Server messages
 
-A Langsys-aware server reports a failure as a list of entries, each `{ field?, code, message, template, params? }`. `template` is the source sentence, `params` fills its `{markers}`, `message` is the same sentence already filled, and `code` is a stable slug for your logic (highlight a field, retry) — never for choosing text.
+A Langsys server SDK leaves your framework's own error response exactly as it is and attaches a list of entries beside it — for Laravel, under `langsys_errors` next to the usual `errors` map in the 422 body. Each entry carries `template`, the source sentence with `{markers}`; `params`, the values that fill them; and `message`, the same sentence already filled. It also passes through what the framework reports about the failure, unchanged: `field`, in the framework's own path format, and `code`, the framework's own identifier for the failure (Laravel's `Min`, Pydantic's `string_too_short`) — use it for your logic, never to choose text.
 
-`resolveServerMessages(body)` finds the entries in a response body wherever they sit; `useRenderServerMessage()` renders them in the current locale:
+`resolveServerMessages(body, { key })` reads the entries from where the server attached them; `useRenderServerMessage()` renders them in the current locale:
 
 ```tsx
 import { resolveServerMessages, useRenderServerMessage } from 'langsys-js-react';
@@ -308,7 +308,7 @@ function FormErrors({ body }: { body: unknown }) {
     const render = useRenderServerMessage();
     return (
         <ul>
-            {resolveServerMessages(body).map((entry, i) => (
+            {resolveServerMessages(body, { key: 'langsys_errors' }).map((entry, i) => (
                 <li key={i}>{render(entry)}</li>
             ))}
         </ul>
@@ -316,21 +316,22 @@ function FormErrors({ body }: { body: unknown }) {
 }
 ```
 
-An entry renders as the translation of its `template`, filled from `params`, when the catalog has one, and as its `message` otherwise — so a message nobody has translated yet still reads correctly. `message` is never used as a lookup key. Templates are looked up under one category, `Errors` unless `messagesCategory` is set in `init`, and it has to match the category the server registers them under. The rendering function changes identity whenever the catalog or locale does, so it can be passed to memoised children.
+Pass the same `key` the server SDK is configured with — a dotted path such as `meta.langsys` works too — or a `resolver` that maps the body to entries yourself. One of the two is required: the body is never searched by shape. If the server renames the pieces, pass `pieces`, e.g. `{ template: 'sentence', message: 'text' }`. An entry needs a `template` or a `message`.
 
-If your API has its own error body, point `resolveServerMessages(body, { key: 'data.failures' })` at the node holding the entries, or pass `{ resolver }` to map native failures to entries.
+An entry renders as the translation of its `template`, filled from `params`, when the catalog has one, and as its `message` otherwise — so a message nobody has translated yet still reads correctly. An entry with no `template` shows its `message`, and `message` is never used as a lookup key. Templates are looked up under one category, `Errors` unless `messagesCategory` is set in `init`, and it has to match the category the server registers them under. The rendering function changes identity whenever the catalog or locale does, so it can be passed to memoised children.
 
 ### Inertia
 
-After a failed form, the server SDK flashes the entries and shares them with the page it redirects to as a prop (`langsys_errors` in the Laravel package, unless configured otherwise). Render them from the page's props:
+After a failed form, the server SDK flashes the entries and shares them with the page it redirects to as a prop under the same key (`langsys_errors` in the Laravel package, unless configured otherwise). Resolve them from the page's props:
 
 ```tsx
 import { usePage } from '@inertiajs/react';
 
 function CardsNew() {
-    const { langsys_errors } = usePage().props;
     const render = useRenderServerMessage();
-    return resolveServerMessages(langsys_errors).map((entry, i) => <p key={i}>{render(entry)}</p>);
+    return resolveServerMessages(usePage().props, { key: 'langsys_errors' }).map((entry, i) => (
+        <p key={i}>{render(entry)}</p>
+    ));
 }
 ```
 
