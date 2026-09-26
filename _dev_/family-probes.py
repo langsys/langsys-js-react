@@ -53,7 +53,9 @@ FAMILIES = {
     'MIG':   (r'legacyKeys\s*[:=]|setLegacyKeys\(|convertLegacy|createLegacyKeys|[Mm]igrat|i18next|trans_choice|\{\{', r'\buseT\b'),
     # Re-exporting SnapshotError / CatalogSnapshot is not participation; loading, parsing or seeding would be.
     'SNAP':  (r'loadSnapshot\(|parseSnapshot|buildSnapshot|snapshotChecksum|seedCatalog|initialTranslations\s*[:=]', r'\bLangsysApp\b'),
-    'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|AsyncLocalStorage|\bVary\b', r'\buseSyncExternalStore\b'),
+    # SRV-6: choosing a locale from the request. The AsyncLocalStorage src/server.ts hands the core
+    # for SRV-7 is not locale resolution, so it is not in this pattern.
+    'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|\bVary\b|searchParams|req\.url|request\.url', r'\buseSyncExternalStore\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),
 }
 

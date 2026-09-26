@@ -12,6 +12,7 @@ It is the React sibling of [`langsys-js-svelte`](https://github.com/langsys/lang
 
 ```
 src/
+    server.ts                 # langsys-js-react/server (node-only): renderInRequestScope over the core's request scope (SRV-7)
     index.ts                  # public exports — LangsysApp wrapper, hooks, Translate, raw signals, type re-exports
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
@@ -78,6 +79,11 @@ LangsysApp.loadSnapshot(snapshot, locale?)  // core's synchronous loader, by ref
 legacyKeys                   // init option, inherited: legacy-key mode (MIG); LangsysApp.Translations.setLegacyKeys(files|null); LegacyFormatError + LegacyKeyFile re-exported
 setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
 writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
+
+// Server entry — langsys-js-react/server (node-only; imports node:async_hooks)
+renderInRequestScope({locale, catalog?, url?}, render) -> { result, seed, close }  // one request, one core scope
+installRequestScopeStorage()  // AsyncLocalStorage for the core; then createRequestScope + scope.enter() where a render can't be wrapped
+createRequestScope, currentRequestScope, setRequestScopeStorage, clearSharedCatalogs  // core, by reference
 
 // Component
 <Translate category? custom_id? label? tag? className? children />
@@ -149,6 +155,7 @@ of it. This applies to every commit in this repo without exception.
 - **The hooks' reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change *and* returning a stable reference between changes. If components don't re-render after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class. If you get an infinite render loop, suspect a signal whose `get()` returns a new reference on every call.
 - **Keep the locale store stable.** Never call `createLocaleStore()` inside render without memoizing — use `useLocaleStore` or `useState(() => createLocaleStore(...))`.
 - **Don't route `writeEnabled` through `useSignal`.** `useWriteEnabled` deliberately calls `useSyncExternalStore` itself with `getServerSnapshot` pinned to a module-level `() => undefined`. React uses that snapshot for the hydration render as well as the server render, and `writeEnabled` is browser-authoritative — so passing the live getter makes a session whose authorization resolved before hydration render markup that disagrees with the server HTML, and React throws the subtree away. This is the one place a binding-authored decision is correct rather than a smell: the *value* still comes from the core, only *when React may read it* is React-specific. Verify any change here by mutation (unpin the snapshot and confirm tests go red), not by a passing test — the tests pass against a broken implementation unless authorization resolves before hydration.
+- **Server state lives in the core's request scope.** `src/server.ts` opens, runs and closes a scope and hands the core an `AsyncLocalStorage`; it keeps no request state of its own. `scope.enter()` must be called in the async function that renders, not in a helper it awaits.
 - **Never branch on capability.** `write_enabled` is server-computed because the same key can be write-enabled from one IP and read-only from another. The React layer surfaces it and never infers it. Likewise no caching of lookups, no network scheduling, and no config keys the base SDK doesn't define.
 
 ## Testing approach

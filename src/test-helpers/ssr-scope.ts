@@ -7,15 +7,17 @@
  * and the seed the client would hydrate from. The cases in `src/ssr-scope.test.tsx` are written
  * once against this interface; each implementation is one adapter.
  *
- * `processGlobalAdapter` is what this binding has today: the core's module-global catalog,
- * seeded per request with `LangsysApp.seedCatalog`. The core's request scope (SRV-7) gets its
- * own adapter when it lands, built from its API and nothing else.
+ * `coreScopeAdapter` is how this binding renders on a server: one core request scope per
+ * request, through `langsys-js-react/server`. `processGlobalAdapter` is the path without it —
+ * the core's module-global catalog, seeded per request with `LangsysApp.seedCatalog` — kept as
+ * the measured baseline the scope exists to fix.
  */
 import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { sTranslations } from 'langsys-js-typescript';
 import type { iCategories } from 'langsys-js-typescript';
 import { LangsysApp } from '../index.js';
+import { createRequestScope, installRequestScopeStorage, renderInRequestScope } from '../server.js';
 
 export interface RenderedRequest {
     html: string;
@@ -63,4 +65,43 @@ export function barrier(): { wait: () => Promise<void>; release: () => void } {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     return { wait: () => gate, release };
+}
+
+/** The core's request scope (SRV-7), through this binding's server entry. */
+export function coreScopeAdapter(source: CatalogSource): RequestAdapter {
+    return {
+        name: 'core request scope',
+        async request(locale, node, beforeRender) {
+            const { result, seed, close } = await renderInRequestScope(
+                { locale, catalog: source[locale] },
+                async () => {
+                    await beforeRender?.();
+                    return renderToString(node);
+                },
+            );
+            await close();
+            return { html: result, seed: seed.catalog };
+        },
+    };
+}
+
+/**
+ * The core's request scope entered rather than wrapped (`scope.enter()`), as a host whose render
+ * cannot be wrapped in a function uses it. `enter()` is called in the request's own async
+ * function, which is the context it makes the scope current in.
+ */
+export function enteredScopeAdapter(source: CatalogSource): RequestAdapter {
+    return {
+        name: 'core request scope, entered',
+        async request(locale, node, beforeRender) {
+            installRequestScopeStorage();
+            const scope = await createRequestScope({ locale, catalog: source[locale] });
+            scope.enter();
+            await beforeRender?.();
+            const html = renderToString(node);
+            const seed = scope.seed();
+            await scope.close();
+            return { html, seed: seed.catalog };
+        },
+    };
 }

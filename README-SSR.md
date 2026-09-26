@@ -1,155 +1,96 @@
-# SSR Usage Guide (Next.js / Remix)
+# SSR Usage Guide
 
-This guide shows how to use `langsys-js-react` with Server-Side Rendering (SSR) to eliminate duplicate API calls and improve performance.
+This guide covers rendering `langsys-js-react` on a server: serving each request its own locale's translations, handing the client the catalog the server rendered with, and collecting what the server render missed.
 
-## The problem
+## How it works
 
-In a traditional SSR flow:
-1. The server fetches translations during render.
-2. The client re-fetches the same translations after hydration.
-3. Duplicate API calls, slower initial render, possible flash of untranslated content.
+A server process renders for many visitors at once. The SDK keeps its catalog and locale in module state, which is right for a browser page and wrong for a server, so each request renders inside a **request scope** of its own — the core's, from `langsys-js-typescript`. A scope has its own locale, its own view of the catalog, its own misses and its own hydration seed, and nothing one request's scope does reaches another's.
 
-## The solution
+This package's server entry, `langsys-js-react/server`, opens a scope around one request's render. It is Node-only (it hands the core an `AsyncLocalStorage`, so the scope stays current across every `await` in the render) and is never part of the main bundle.
 
-Pass pre-fetched translations from server to client using the `initialTranslations` config option. The client SDK uses them as-is and skips the initial fetch. Because the hooks are built on `useSyncExternalStore` with a server snapshot, the first paint already reflects the seeded translations.
-
-## Next.js — App Router
-
-### Step 1: Fetch translations on the server
+## Rendering one request
 
 ```tsx
-// app/layout.tsx (Server Component)
-import type { iCategories } from 'langsys-js-react';
-import { LangsysClient } from './LangsysClient';
+// server.tsx
+import { renderToString } from 'react-dom/server';
+import { renderInRequestScope } from 'langsys-js-react/server';
 
-async function getTranslations(locale: string): Promise<iCategories> {
-    const res = await fetch(
-        `https://api.langsys.dev/api/projects/${process.env.LANGSYS_PROJECT_ID}/translations?locale=${locale}`,
-        { headers: { 'x-Authorization': process.env.LANGSYS_API_KEY!, 'Content-Type': 'application/json' } }
+app.get('*', async (req, res) => {
+    const locale = resolveLocale(req); // your framework's or app's resolved locale
+
+    const { result: html, seed, close } = await renderInRequestScope(
+        { locale, url: req.url },
+        () => renderToString(<App />),
     );
-    const result = await res.json();
-    return result.data as iCategories;
-}
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-    const locale = 'en'; // from cookie / Accept-Language / route segment
-    const translations = await getTranslations(locale);
+    res.send(`<!doctype html>
+<div id="root">${html}</div>
+<script>window.__LANGSYS_SEED__ = ${JSON.stringify(seed)}</script>
+<script type="module" src="/client.js"></script>`);
 
-    return (
-        <html lang={locale}>
-            <body>
-                <LangsysClient
-                    locale={locale}
-                    translations={translations}
-                    projectId={process.env.LANGSYS_PROJECT_ID!}
-                    apiKey={process.env.NEXT_PUBLIC_LANGSYS_API_KEY!} // read-only key for the client
-                >
-                    {children}
-                </LangsysClient>
-            </body>
-        </html>
-    );
-}
+    await close(); // after the response: hands this request's misses to the core
+});
 ```
 
-### Step 2: Initialize on the client
+- `renderInRequestScope({ locale, catalog?, url? }, render)` opens a scope, runs `render` inside it and resolves once it has finished. The scope fetches the locale's catalog at most once per request, shared read-only with other requests rendering the same locale; pass `catalog` when you already have it (from a snapshot or your own fetch).
+- Inside the render, `useT()` and `LangsysApp.t` read this request's catalog.
+- `seed` is `{ locale, catalog }`: exactly what this request rendered with.
+- `close()` runs after the response has been sent. What it does with the misses is set by `ssrTokenStrategy` (below). It never throws, and calling it again returns the first result.
+
+Where your framework cannot wrap its render in a function, open the scope and enter it instead, in the request's own async function, before anything renders:
+
+```ts
+import { createRequestScope, installRequestScopeStorage } from 'langsys-js-react/server';
+
+installRequestScopeStorage(); // once, at startup
+
+// in the request handler, before rendering:
+const scope = await createRequestScope({ locale, url });
+scope.enter(); // current for the rest of this request's async context
+// ...render, send scope.seed() with the page, then after the response:
+await scope.close();
+```
+
+`scope.enter()` must be called in the function that goes on to render, not inside a helper it awaits: it makes the scope current for the async context it is called in.
+
+## Hydrating on the client
+
+Seed the client with the server's catalog **before** hydrating, so the first client render matches the server's HTML:
 
 ```tsx
-// app/LangsysClient.tsx
-'use client';
+// client.tsx
+import { hydrateRoot } from 'react-dom/client';
+import { LangsysApp, createLocaleStore } from 'langsys-js-react';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { LangsysApp, useLocaleStore, type iCategories } from 'langsys-js-react';
+const seed = window.__LANGSYS_SEED__;
+LangsysApp.seedCatalog(seed.catalog, seed.locale); // synchronous
 
-export function LangsysClient({
-    locale,
-    translations,
-    projectId,
-    apiKey,
-    children,
-}: {
-    locale: string;
-    translations: iCategories;
-    projectId: string;
-    apiKey: string;
-    children: ReactNode;
-}) {
-    const [, , localeStore] = useLocaleStore(locale);
+const localeStore = createLocaleStore(seed.locale);
+hydrateRoot(document.getElementById('root')!, <App localeStore={localeStore} />);
 
-    useEffect(() => {
-        LangsysApp.init({
-            projectid: projectId,
-            key: apiKey,
-            UserLocaleStore: localeStore,
-            baseLocale: 'en',
-            initialTranslations: translations,
-            initialTranslationsLocale: locale,
-            ssrTokenStrategy: 'client',
-        });
-    }, [localeStore, projectId, apiKey, translations, locale]);
-
-    return <>{children}</>;
-}
+LangsysApp.init({
+    projectid: PROJECT_ID,
+    key: PUBLIC_KEY, // a read-only key in the browser
+    UserLocaleStore: localeStore,
+    baseLocale: 'en',
+});
 ```
 
-### Step 3: Use translations in any client component
+`seedCatalog` is synchronous and marks the locale as loaded, so `init()` does not fetch it again.
 
-```tsx
-'use client';
-import { useT } from 'langsys-js-react';
+## Next.js
 
-export function Hero() {
-    const t = useT();
-    return (
-        <>
-            <h1>{t('Welcome', 'HomePage')}</h1>
-            <p>{t('Hello, {name}!', 'HomePage', { name: 'Sarah' })}</p>
-        </>
-    );
-}
-```
+Next renders the tree itself, in phases this package does not wrap, so it does not yet ship wiring for the App Router or the Pages Router. The calls are the ones above: open a scope in the async context that renders the request, hand `scope.seed()` to the page, and close it after the response (`after()` from `next/server`). Until this package ships and tests that wiring, a Next app initializes the SDK on the client only, with `LangsysApp.init()` in a Client Component's `useEffect`; server-rendered text is then source text until the client translates it.
 
-## Next.js — Pages Router
+## What a server render translates and discovers
 
-```tsx
-// pages/_app.tsx
-import type { AppProps } from 'next/app';
-import { useEffect } from 'react';
-import { LangsysApp, useLocaleStore } from 'langsys-js-react';
+| What renders the text | Translated on the server | Discovered |
+| --- | --- | --- |
+| `t()` / `useT()` inside a scope | Yes, in the request's locale | Yes: the miss is recorded in the scope and handed on by `close()` |
+| `<Translate custom_id="…">` | No — source text until the client translates it | On the client, when it mounts; the server HTML already carries its `data-ls-contentblock` identity |
+| `<Translate>` without `custom_id`, `<Phrase>` | No — source text until the client translates it | On the client, when it mounts |
 
-export default function App({ Component, pageProps }: AppProps) {
-    const locale = pageProps.locale ?? 'en';
-    const [, , localeStore] = useLocaleStore(locale);
-
-    useEffect(() => {
-        LangsysApp.init({
-            projectid: process.env.NEXT_PUBLIC_LANGSYS_PROJECT_ID!,
-            key: process.env.NEXT_PUBLIC_LANGSYS_API_KEY!,
-            UserLocaleStore: localeStore,
-            baseLocale: 'en',
-            initialTranslations: pageProps.translations,
-            initialTranslationsLocale: locale,
-        });
-    }, [localeStore, pageProps.translations, locale]);
-
-    return <Component {...pageProps} />;
-}
-```
-
-```tsx
-// pages/index.tsx — fetch translations in getServerSideProps
-import type { iCategories } from 'langsys-js-react';
-
-export async function getServerSideProps() {
-    const locale = 'en';
-    const res = await fetch(
-        `https://api.langsys.dev/api/projects/${process.env.LANGSYS_PROJECT_ID}/translations?locale=${locale}`,
-        { headers: { 'x-Authorization': process.env.LANGSYS_API_KEY!, 'Content-Type': 'application/json' } }
-    );
-    const { data } = await res.json();
-    return { props: { locale, translations: data as iCategories } };
-}
-```
+`<Translate>` and `<Phrase>` hand their DOM to the core on mount, and a server renders no DOM, so block content reaches the browser in the source language and is translated there. `useCurrentLocale()` and `useTranslations()` read the process-wide locale and catalog even inside a scope, so on a server read the request's locale from `scope.locale` rather than from them.
 
 ## Locale switching
 
@@ -179,63 +120,6 @@ export function LocaleSwitcher() {
 
 > Keep one locale store for the app (created where you call `init`) and thread `setLocale` down via context or props, rather than calling `useLocaleStore` with a fresh initial value in unrelated trees.
 
-## Benefits
-
-### Performance
-- No duplicate API calls (server + client).
-- Translations ready immediately on hydration.
-- Faster Time to Interactive (TTI).
-- Reduced API usage and costs.
-
-### User experience
-- No flash of untranslated content.
-- Instant translation display.
-- Better SEO with server-rendered translations.
-
-### Developer experience
-- Simple configuration.
-- Full TypeScript support, including compile-time-checked interpolation params on `t()`.
-
-## Discovering server-rendered content
-
-Automatic token discovery happens wherever `t()` runs. In both setups above the SDK is initialized inside a `useEffect`, and effects never run during server rendering — so **there is no configured SDK instance in the Node process at all**. Everything the SDK does happens in the browser.
-
-That is fine for most content, but it has one consequence worth understanding before you rely on discovery:
-
-| What renders the text | Discovered? | Why |
-| --- | --- | --- |
-| `t()` in a Client Component | Yes | It runs again in the browser during hydration, and the miss is caught there. |
-| `<Translate>` / `<Phrase>` | Yes | They tokenize the delivered DOM on mount, whichever side rendered it. |
-| `t()` in a Server Component | **No** | It executes only in Node, emits plain text with no marker, and no client-side `t()` ever runs for it. |
-
-A bare `t('Welcome', 'HomePage')` inside a Server Component renders correct-looking base-language text and registers nothing — in every environment, including local development. Because the server has no initialized SDK instance, it also has no catalog, so such a call always renders the base language regardless of the user's locale. `ssrTokenStrategy` does not change any of this (see below).
-
-To make server-rendered content translatable and discoverable, wrap it in `<Translate>` or `<Phrase>`. Both are Client Components, and this package ships no `'use client'` directive, so re-export them through a file of your own that has one:
-
-```tsx
-// app/langsys-client.tsx
-'use client';
-export { Translate, Phrase, DontTranslate } from 'langsys-js-react';
-```
-
-```tsx
-// app/Hero.tsx — a Server Component
-import { Translate } from './langsys-client';
-
-export default function Hero() {
-    return (
-        <Translate category="HomePage">
-            <h1>Welcome</h1>
-            <p>Start your free trial today.</p>
-        </Translate>
-    );
-}
-```
-
-The children are server-rendered as normal; the client instance walks the delivered DOM on mount, registers the tokens, and re-translates on locale change.
-
-If you'd rather not wrap it, register those phrases another way — through the Translation Manager, or from a client-rendered path that exercises the same strings.
-
 ## Configuration options
 
 ### SSR token strategy
@@ -244,53 +128,35 @@ If you'd rather not wrap it, register those phrases another way — through the 
 { ssrTokenStrategy: 'client' | 'server' | 'auto' }
 ```
 
-This controls when tokens found during a *server* render are registered. It acts on an SDK instance running inside the rendering process, so it only does anything if `LangsysApp.init()` has run in that process.
+This decides what `close()` does with the phrases a scoped server render missed. It acts on an SDK initialized in the rendering process (`LangsysApp.init()` on the server):
 
-**In the Next.js setups above it is inert** — `init()` runs in a `useEffect`, so no such instance exists and the option has nothing to act on. Leave it at the default and use the guidance in [Discovering server-rendered content](#discovering-server-rendered-content) instead.
+- `'client'` (default) — nothing is sent from the server. Content that also renders on the client is caught there, when `t()` runs in the browser.
+- `'server'` — `close()` sends the misses from the server, when the server's key may write. Note that this originates from your server's IP rather than a browser's.
+- `'auto'` — `close()` sends a short list (fewer than 5) from the server and leaves a longer one to the client.
 
-The option is meaningful only in genuinely isomorphic deployments — a custom server, or same-process SSR where `init()` runs in the rendering process:
-
-- `'client'` (default) — nothing is registered from the server render. Content that also renders on the client is caught there, when `t()` runs in the browser. (Base SDK 0.5.0+ skips collecting these entirely; earlier versions queue them in the server process and never drain that queue.)
-- `'server'` — tokens are registered directly from the server render. Note that this originates from your server's IP rather than a browser's.
-- `'auto'` — small batches (≤5) registered from the server, larger ones deferred to the client.
-
-One constraint on isomorphic use: the catalog and locale stores are module-scope singletons, so a rendering process is effectively single-locale. Concurrent requests for different locales share one catalog and will show each other's language.
+`close()` never throws; its result says whether it sent or why it skipped.
 
 ### Debug mode
 
-```typescript
-{ debug: true, initialTranslations: translations, initialTranslationsLocale: locale }
-```
-
-Look for:
-- `SSR initial translations config:` on init — confirms pre-fetched data is detected.
-- `Using pre-fetched translations for locale` — confirms the initial fetch was skipped.
-- `Locale change detected!` — fires on a subsequent locale switch.
+Pass `debug: true` to `init()` to log the SDK's lifecycle to the console, including `Locale change detected!` on a locale switch.
 
 ## Important notes
 
-1. **One-time use.** `initialTranslations` is consumed only at init. Locale changes after init go through the normal fetch path.
-2. **Matching locales.** Always provide `initialTranslationsLocale` with `initialTranslations` so the SDK knows what locale the data represents.
-3. **Data format.** The translations payload must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
-4. **Cache.** The 60-second locale cache still applies. Pre-fetched translations count as cached.
-5. **Token creation.** Use a read-only API key in the client in production — anything shipped in public JS is extractable, and with a read-only key missing tokens simply aren't sent. Populate the catalog from your development environment instead, where a write key stays on your own machine. Note that a write key handed to the Next server does nothing on its own: there is no SDK instance there to use it.
-6. **`'use client'`.** `useT`, `useLocaleStore`, `<Translate>`, `<Phrase>`, and `LangsysApp.init` all run on the client, and this package ships no `'use client'` directive — put them behind a Client Component boundary of your own, as in the `LangsysClient` and `langsys-client.tsx` examples above. This applies to *every* import from `langsys-js-react`, not just the hooks and components: the package builds to a single bundled module that imports React hooks, so pulling any export of it into a Server Component pulls in that module. For the parts you legitimately want on the server — `LangsysAppAPI`, or `detectPreferredLocale()` against an `Accept-Language` header — import them from `langsys-js-typescript` instead. It's this package's own dependency, it's already in your tree, and it has no React in it.
+1. **Seed before hydrating.** Call `LangsysApp.seedCatalog(seed.catalog, seed.locale)` before `hydrateRoot`, with the seed from the same request. Seeding after hydration, or from another request, renders different text from the server's HTML.
+2. **One scope per request.** Open a scope for every request and close it after that request's response. Never share one across requests: sharing one is exactly the cross-visitor leak the scope exists to prevent.
+3. **Data format.** A `catalog` passed to a scope must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
+4. **Keys.** Use a read-only API key in the browser — anything shipped in public JS is extractable. A write key belongs on the server, where `close()` can send a scope's misses with it under the `'server'` or `'auto'` strategy.
+5. **Server-only entry.** Import `langsys-js-react/server` only from server code; it imports `node:async_hooks`. The main entry imports React hooks, so in a React Server Component environment put its hooks and components behind a Client Component boundary of your own (this package ships no `'use client'` directive).
 
 ## Troubleshooting
 
-### Translations not appearing
-- Check that `initialTranslationsLocale` matches the `UserLocaleStore` value at init.
-- Verify the translations payload matches the `iCategories` shape.
-- Enable `debug: true` and look for the messages above.
-
-### Still seeing duplicate API calls
-- Confirm both `initialTranslations` *and* `initialTranslationsLocale` are passed.
-- Confirm init runs before any rendering that calls `t(...)`.
-- Confirm the locale hasn't drifted between server and client.
+### Another visitor's language appears in a page
+- Every render must run inside its own request's scope: `renderInRequestScope`, or `scope.enter()` called in the request's own async function before rendering.
+- `useCurrentLocale()` and `useTranslations()` read process-wide state even inside a scope; use `scope.locale` on the server.
 
 ### Hydration mismatch warnings
-- Make sure the `locale` you seed on the server matches the initial value you pass to `useLocaleStore` on the client.
-- Keep `LangsysApp.init` inside `useEffect` (client-only) so the server render and the first client render agree.
+- Seed the client with the seed of the request that rendered the page, before `hydrateRoot`.
+- Make sure the locale store's initial value on the client is the seed's locale.
 
 ### TypeScript errors on `t()`
 - Placeholders are compile-time-checked: `t('Hello, {name}!', 'Cat')` *requires* a params object with `name`. Either add the key or remove the placeholder.

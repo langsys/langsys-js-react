@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
+import { CONTENT_BLOCK_MARKER_ATTR, Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
 
 /**
  * Props for the React `Translate` component. Mirrors the Svelte component's
@@ -81,7 +81,14 @@ export function Translate({
         instanceRef.current?.setParams(params);
     });
 
-    return createElement(tag, { ref: hostRef, className }, children);
+    // An explicit `custom_id` is the block's identity as the app gave it, so the host carries it
+    // from the first render — on a server too, where the effect above never runs (spec MARK-1).
+    // A content-derived id is computed by the core's tokenizer on mount.
+    return createElement(
+        tag,
+        { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
+        children,
+    );
 }
 
 export default Translate;

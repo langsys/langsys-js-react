@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-    entry: ['src/index.ts'],
+    // `server` is node-only (it imports node:async_hooks), so it is its own entry, never in the main bundle.
+    entry: ['src/index.ts', 'src/server.ts'],
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,
