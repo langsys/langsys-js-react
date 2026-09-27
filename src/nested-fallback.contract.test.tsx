@@ -11,7 +11,7 @@
  * show it.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, createElement as el, type ReactNode } from 'react';
+import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LangsysApp, Translate, createLocaleStore } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
@@ -91,6 +91,29 @@ describe('nested blocks register once', () => {
             middle: blocksWith('Middle one').length,
             inner: blocksWith('Inner one').length,
         }).toEqual({ outer: 1, middle: 1, inner: 1 });
+        await done();
+    });
+});
+
+describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
+    // Measured: the fallback block's DOM class walks what is on screen when it mounts, so a lazy
+    // child still behind its Suspense fallback keys the block on the placeholder, and the real
+    // content never registers. Recorded as it.fails until the guard exists; passing turns it red.
+    it.fails('no block is keyed on the placeholder, and the real content registers once it arrives', async () => {
+        let resolveLate!: (m: { default: () => ReactNode }) => void;
+        const Late = lazy(() => new Promise<{ default: () => ReactNode }>((r) => (resolveLate = r)));
+        const done = await render(
+            el(Translate, { category: 'UI' },
+                el('p', null, 'Intro one'),
+                el(Suspense, { fallback: el('p', null, 'Loading spinner') }, el(Late)),
+            ),
+        );
+        await sleep(1500);
+        await act(async () => resolveLate({ default: () => el('p', null, 'Real content') }));
+        await sleep(1500);
+        const phrases = sent.flatMap((i) => ((i.phrases as Array<{ phrase: string }> | undefined) ?? []).map((p) => p.phrase));
+        expect(phrases).not.toContain('Loading spinner');
+        expect(phrases).toContain('Real content');
         await done();
     });
 });

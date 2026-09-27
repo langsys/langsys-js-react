@@ -90,16 +90,18 @@ describe('a block the tree path cannot render', () => {
         return el('b', null, 'New');
     }
 
-    it('on a server: source served, explicit id stamped, and the core warns once', async () => {
+    it('on a server: source served, explicit id stamped, no resolved marker, and the core warns once', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const tree = el(Translate, { category: 'UI', custom_id: 'promo' }, el('p', null, 'Hello world'), el(Badge));
         const { result: html, close } = await renderInRequestScope({ locale: 'es-es', catalog: ES }, async () => {
+            // A block the binding declines to capture takes SRV-1's fallback and throws nothing (SRV-5).
+            expect(() => renderToString(tree)).not.toThrow();
             const first = renderToString(tree);
-            renderToString(tree); // a second render of the same shape does not warn again
             return first;
         });
         await close();
         expect(html).toBe('<translate data-ls-contentblock="promo"><p>Hello world</p><b>New</b></translate>');
+        expect(html).not.toContain('data-ls-resolved');
         const messages = warn.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('not rendered on the server'));
         expect(messages).toHaveLength(1);
     });
