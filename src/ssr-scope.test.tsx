@@ -38,11 +38,9 @@ type Case =
 const ADAPTERS: Array<{ adapter: RequestAdapter; knownFailing: Set<Case> }> = [
     {
         adapter: coreScopeAdapter(SOURCE),
-        // Measured: the scope isolates t(), but the core's currentlyLoadedLocale and sTranslations
-        // still read the process global inside it; and the core's block path is DOM-only, so a
-        // <Translate> on a server has no derived id and renders its source text.
+        // Measured: the core's block path is DOM-only, so a <Translate> on a server has no
+        // derived id and renders its source text.
         knownFailing: new Set<Case>([
-            'locale and catalog hooks follow the request',
             'MARK-1 SSR route stamps a content-derived id',
             'block content is translated on the server',
         ]),
@@ -51,7 +49,6 @@ const ADAPTERS: Array<{ adapter: RequestAdapter; knownFailing: Set<Case> }> = [
         adapter: enteredScopeAdapter(SOURCE),
         // The same measurements as the wrapped scope.
         knownFailing: new Set<Case>([
-            'locale and catalog hooks follow the request',
             'MARK-1 SSR route stamps a content-derived id',
             'block content is translated on the server',
         ]),

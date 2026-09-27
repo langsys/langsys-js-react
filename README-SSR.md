@@ -51,7 +51,7 @@ scope.enter(); // current for the rest of this request's async context
 await scope.close();
 ```
 
-`scope.enter()` must be called in the function that goes on to render, not inside a helper it awaits: it makes the scope current for the async context it is called in.
+Prefer `renderInRequestScope` (or `scope.run()`) wherever you can wrap the render. `scope.enter()` binds the scope to the async continuation it is called in, so it holds only when that same function goes on to render. Any function your host awaits and returns from before rendering — a middleware, a route handler that returns before the render, a helper that opens the scope — loses it on return, even when `enter()` comes after that function's own `await`, and the render then reads another request's state.
 
 ## Hydrating on the client
 
@@ -86,11 +86,11 @@ Next renders the tree itself, in phases this package does not wrap, so it does n
 
 | What renders the text | Translated on the server | Discovered |
 | --- | --- | --- |
-| `t()` / `useT()` inside a scope | Yes, in the request's locale | Yes: the miss is recorded in the scope and handed on by `close()` |
+| `t()` / `useT()` inside a scope | Yes, in the request's locale; `useCurrentLocale()` and `useTranslations()` read the request's too | Yes: the miss is recorded in the scope and handed on by `close()` |
 | `<Translate custom_id="…">` | No — source text until the client translates it | On the client, when it mounts; the server HTML already carries its `data-ls-contentblock` identity |
 | `<Translate>` without `custom_id`, `<Phrase>` | No — source text until the client translates it | On the client, when it mounts |
 
-`<Translate>` and `<Phrase>` hand their DOM to the core on mount, and a server renders no DOM, so block content reaches the browser in the source language and is translated there. `useCurrentLocale()` and `useTranslations()` read the process-wide locale and catalog even inside a scope, so on a server read the request's locale from `scope.locale` rather than from them.
+`<Translate>` and `<Phrase>` hand their DOM to the core on mount, and a server renders no DOM, so block content reaches the browser in the source language and is translated there.
 
 ## Locale switching
 
@@ -151,8 +151,7 @@ Pass `debug: true` to `init()` to log the SDK's lifecycle to the console, includ
 ## Troubleshooting
 
 ### Another visitor's language appears in a page
-- Every render must run inside its own request's scope: `renderInRequestScope`, or `scope.enter()` called in the request's own async function before rendering.
-- `useCurrentLocale()` and `useTranslations()` read process-wide state even inside a scope; use `scope.locale` on the server.
+- Every render must run inside its own request's scope: `renderInRequestScope`, or `scope.enter()` called in the function that itself renders — never in a middleware, handler or helper that returns before the render.
 
 ### Hydration mismatch warnings
 - Seed the client with the seed of the request that rendered the page, before `hydrateRoot`.

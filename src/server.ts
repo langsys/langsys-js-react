@@ -33,7 +33,8 @@ let storageInstalled = false;
 /**
  * Give the core the `AsyncLocalStorage` an async render needs. `renderInRequestScope` calls it
  * for you; call it yourself once at startup when you open scopes with `createRequestScope` and
- * `scope.enter()`. Idempotent.
+ * `scope.enter()`. `enter()` holds only in the continuation that itself renders: called in a
+ * function the host awaits and returns from, it is lost on return. Idempotent.
  */
 export function installRequestScopeStorage(): void {
     if (storageInstalled) return;
