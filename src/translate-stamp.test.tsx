@@ -31,8 +31,23 @@ describe('<Translate> identity on the server route', () => {
         container.remove();
     });
 
-    it('with no custom_id the server HTML carries no marker; the core derives the id on mount', () => {
-        const html = renderToString(createElement(Translate, { category: 'UI', children: 'Hello world' }));
-        expect(html).toBe('<translate>Hello world</translate>');
+    it('with no custom_id the server HTML carries the derived id, and hydration keeps it', async () => {
+        const tree = createElement(Translate, { category: 'UI', children: 'Hello world' });
+        const html = renderToString(tree);
+        const id = /data-ls-contentblock="([^"]+)"/.exec(html)?.[1];
+        expect(id).toBeTruthy();
+
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        document.body.appendChild(container);
+        const recoverable: unknown[] = [];
+        let root!: ReturnType<typeof hydrateRoot>;
+        await act(async () => {
+            root = hydrateRoot(container, tree, { onRecoverableError: (e) => recoverable.push(e) });
+        });
+        expect(recoverable).toEqual([]);
+        expect(container.querySelector('translate')?.getAttribute('data-ls-contentblock')).toBe(id);
+        await act(async () => root.unmount());
+        container.remove();
     });
 });

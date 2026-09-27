@@ -10,7 +10,7 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { LangsysApp, Translate, useCurrentLocale, useT, useTranslations } from './index.js';
+import { LangsysApp, Phrase, Translate, useCurrentLocale, useT, useTranslations } from './index.js';
 import {
     barrier,
     catalog,
@@ -38,20 +38,11 @@ type Case =
 const ADAPTERS: Array<{ adapter: RequestAdapter; knownFailing: Set<Case> }> = [
     {
         adapter: coreScopeAdapter(SOURCE),
-        // Measured: the core's block path is DOM-only, so a <Translate> on a server has no
-        // derived id and renders its source text.
-        knownFailing: new Set<Case>([
-            'MARK-1 SSR route stamps a content-derived id',
-            'block content is translated on the server',
-        ]),
+        knownFailing: new Set<Case>(),
     },
     {
         adapter: enteredScopeAdapter(SOURCE),
-        // The same measurements as the wrapped scope.
-        knownFailing: new Set<Case>([
-            'MARK-1 SSR route stamps a content-derived id',
-            'block content is translated on the server',
-        ]),
+        knownFailing: new Set<Case>(),
     },
     {
         adapter: processGlobalAdapter(SOURCE),
@@ -60,8 +51,6 @@ const ADAPTERS: Array<{ adapter: RequestAdapter; knownFailing: Set<Case> }> = [
         knownFailing: new Set<Case>([
             'concurrent it and de',
             'locale and catalog hooks follow the request',
-            'MARK-1 SSR route stamps a content-derived id',
-            'block content is translated on the server',
         ]),
     },
 ];
@@ -153,3 +142,30 @@ describe('langsys-js-react/server — closing after the response (SRV-3)', () =>
 function Missing() {
     return createElement('p', null, useT()('Not in the catalog', 'UI'));
 }
+
+describe('SRV-1 — the served bytes carry the request locale', () => {
+    it('t(), <Translate> and <Phrase> are Italian in the served HTML; a control miss is source and recorded', async () => {
+        const IT = catalog({
+            UI: { Pricing: 'Prezzi', 'Hello world': 'Ciao mondo', 'Pay {m0o}now{m0c}': 'Paga {m0o}ora{m0c}' },
+        });
+        const { result: html, close } = await renderInRequestScope({ locale: 'it', catalog: IT }, (scope) => {
+            const out = renderToString(
+                createElement(
+                    'main',
+                    null,
+                    createElement(Price),
+                    createElement(Translate, { category: 'UI', children: 'Hello world' }),
+                    createElement(Phrase, { category: 'UI' }, 'Pay ', createElement('b', null, 'now')),
+                    createElement(Missing),
+                ),
+            );
+            expect(scope.misses()).toContainEqual({ category: 'UI', phrase: 'Not in the catalog' });
+            return out;
+        });
+        await close();
+        expect(html).toContain('<p>Prezzi</p>');
+        expect(html).toContain('Ciao mondo');
+        expect(html).toContain('Paga <b>ora</b>');
+        expect(html).toContain('<p>Not in the catalog</p>');
+    });
+});

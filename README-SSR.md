@@ -87,10 +87,10 @@ Next renders the tree itself, in phases this package does not wrap, so it does n
 | What renders the text | Translated on the server | Discovered |
 | --- | --- | --- |
 | `t()` / `useT()` inside a scope | Yes, in the request's locale; `useCurrentLocale()` and `useTranslations()` read the request's too | Yes: the miss is recorded in the scope and handed on by `close()` |
-| `<Translate custom_id="…">` | No — source text until the client translates it | On the client, when it mounts; the server HTML already carries its `data-ls-contentblock` identity |
-| `<Translate>` without `custom_id`, `<Phrase>` | No — source text until the client translates it | On the client, when it mounts |
+| `<Translate>`, `<Phrase>` with markup and text | Yes, with the block's id on its element | Yes: registered through the scope, handed on by `close()` |
+| `<Translate>` / `<Phrase>` holding a component, `lazy`, `Suspense` or `dangerouslySetInnerHTML` | No — source text, with an explicit `custom_id` on the element; the SDK warns once | On the client, when it mounts |
 
-`<Translate>` and `<Phrase>` hand their DOM to the core on mount, and a server renders no DOM, so block content reaches the browser in the source language and is translated there.
+A block of markup and text renders through the core on the server and again in the browser, with the same result, so the page arrives translated and hydrates without a mismatch. A block whose content is only known once React renders it is served as written and translated in the browser.
 
 ## Locale switching
 

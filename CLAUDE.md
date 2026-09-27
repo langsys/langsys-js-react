@@ -16,7 +16,8 @@ src/
     index.ts                  # public exports — LangsysApp wrapper, hooks, Translate, raw signals, type re-exports
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
-    components/               # Translate / Phrase / DontTranslate — mount/destroy glue over the core's DOM classes
+    block-nodes.ts            # React children <-> the core's BlockNode tree (toBlockNodes / toReactNodes)
+    components/               # Translate / Phrase over the core's renderBlock/registerBlock; DOM-class fallback; DontTranslate
     test-helpers/             # contract-fixture launcher; SSR RequestAdapter harness (ssr-scope.ts)
     *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
 contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
@@ -36,7 +37,7 @@ The Svelte wrapper adapts a native store *into* the SDK (`writable` → `Signal`
 
 3. **`useLocaleStore(initial)`** — lazily creates one stable `Signal<string>` (via `useState(() => createLocaleStore(...))`), subscribes to it with `useSignal`, and returns `[locale, setLocale, store]`. Pass `store` to `init`; drive the locale with `setLocale`.
 
-4. **`<Translate>`** — wraps the vanilla `Translate` DOM class. A `useRef` gets the host node; a `useEffect` constructs `new Translate(host, opts)` on mount and calls `instance.destroy()` on cleanup. The DOM walking, content-block registration, attribute harvesting, and re-translation on locale change all live in the underlying class. Like the Svelte component, it mutates the rendered DOM in place — keep children static.
+4. **`<Translate>` / `<Phrase>`** — `toBlockNodes(children)` maps host elements and text to the core's `BlockNode` tree; `renderBlock` returns the translated tree, the block's id and host markers, synchronously, from the active catalog (a request scope's or the page's); `toReactNodes` clones the original React elements into the positions the translation gives them (`source`), so handlers, refs and keys survive reordering. `registerBlock` registers with no DOM: in an effect keyed on `t` on the client (one-shot, with `host` for GATE-10's ancestor walk), during render inside a request scope. Content holding a component, `lazy`, `Suspense` or `dangerouslySetInnerHTML` falls back to the core's DOM class after mount, stamps an explicit `custom_id`, warns once on a server (`warnUnrenderedBlock`), and provides `UnderDomWalk` so nested tree-rendered blocks leave their registration to its walk.
 
 ## Public API
 
@@ -150,7 +151,7 @@ of it. This applies to every commit in this repo without exception.
 ## When making changes
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
-- **Keep `<Translate>` to mount/destroy glue.** The DOM walking lives in the vanilla `Translate` class in `langsys-js-typescript`. Don't fork the tokenizer here.
+- **Keep `<Translate>` and `<Phrase>` rendering through the core.** Identity, tokens, translation and markers come from `renderBlock` / `registerBlock`; the binding only maps React children to nodes and back. Don't fork the tokenizer or decide a marker here.
 - **Type re-exports go through `index.ts`.** Consumers shouldn't have to reach into `langsys-js-typescript` for routine types.
 - **The hooks' reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change *and* returning a stable reference between changes. If components don't re-render after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class. If you get an infinite render loop, suspect a signal whose `get()` returns a new reference on every call.
 - **Keep the locale store stable.** Never call `createLocaleStore()` inside render without memoizing — use `useLocaleStore` or `useState(() => createLocaleStore(...))`.

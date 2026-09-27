@@ -185,11 +185,13 @@ The component:
     - **Screen-reader text:** `aria-label`, `aria-placeholder`, `aria-description`, `aria-valuetext`, `aria-roledescription` — worth knowing these are covered, since untranslated ARIA strings are invisible on the page and only surface to someone using a screen reader
     - **Validation messages:** `data-error`, `data-error-message`, `data-validation-message`, `data-invalid-message`, `data-required-message`, `data-pattern-message`
 - Translates the `value` attribute **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` is deliberately *not* in the SDK's `TRANSLATABLE_ATTRIBUTES`; it's gated by `VALUE_TRANSLATABLE_ELEMENTS` / `VALUE_TRANSLATABLE_INPUT_TYPES`.
-- Captures semantic CSS so translators see the styled appearance in the Translation Manager.
+- Registers a snapshot of the block's markup, so translators see its structure in the Translation Manager.
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
 - Auto re-translates on locale change.
 
-`<Translate>` mounts the SDK's DOM walker on its host element and lets it mutate the rendered output in place, so **keep its children static** — prose, marketing copy, CMS-rendered articles, forms with placeholders. For dynamic per-string values that React owns, use `useT()`.
+`<Translate>` renders its content through the core: the translated text comes back as data, and the component renders it as React elements — your own elements, with their handlers, refs and keys, in the places the translation puts them. It renders the same on a server and in the browser, so a server-rendered page arrives translated and hydrates without a mismatch, and a locale change re-renders it. Keep its children to markup and text — prose, marketing copy, forms with placeholders. For dynamic per-string values that React owns, use `useT()`.
+
+A block whose children hold a component, `lazy`, `Suspense` or `dangerouslySetInnerHTML` cannot be rendered that way, because its content isn't known until React renders it. Such a block renders its children as they are, and the SDK translates it in the browser after it mounts; its `custom_id`, when you give one, is on the element from the first render. On a server the SDK warns once that it served such a block in the source language.
 
 ```tsx
 {/* CMS content goes through Translate as-is */}

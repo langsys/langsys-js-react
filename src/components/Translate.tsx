@@ -1,6 +1,18 @@
-import { createElement, useEffect, useRef } from 'react';
+import { createElement, useContext, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { CONTENT_BLOCK_MARKER_ATTR, Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
+import {
+    CONTENT_BLOCK_MARKER_ATTR,
+    Translate as VanillaTranslate,
+    currentRequestScope,
+    registerBlock,
+    renderBlock,
+    warnUnrenderedBlock,
+    type BlockOptions,
+    type ParamPrimitive,
+} from 'langsys-js-typescript';
+import { toBlockNodes, toReactNodes } from '../block-nodes.js';
+import { useT } from '../hooks.js';
+import { UnderDomWalk } from './dom-walk.js';
 
 /**
  * Props for the React `Translate` component. Mirrors the Svelte component's
@@ -36,20 +48,20 @@ export interface TranslateProps {
 }
 
 /**
- * React wrapper around the vanilla `Translate` DOM class from
- * `langsys-js-typescript`. It renders a host element, then on mount lets the
- * vanilla class walk and tokenize the rendered children (text nodes plus
- * translatable attributes), register the content block, and re-translate on
- * locale change. On unmount it tears the instance down.
+ * Translates a block of static content: prose, markup, CMS copy.
  *
- * This is the React analog of the Svelte `<Translate>` component — pure
- * mount/destroy glue. The DOM walking, content-block registration, attribute
- * harvesting, and re-translation lifecycle all live in the base SDK.
+ * Content made of host elements, text and numbers renders through the core's `renderBlock`: the
+ * translated tree, the block's id and its markers come back as data, and this component renders
+ * them as React elements — the originals, cloned with their handlers, refs and keys, in the
+ * places the translation puts them. The same call runs on a server (inside a request scope) and
+ * in the browser (over the seeded catalog), so the first client render matches the server's HTML,
+ * and a locale change re-renders it. Registration goes through the core's `registerBlock`; no DOM
+ * class ever walks text nodes React owns.
  *
- * Like the Svelte component, this lets the SDK mutate the rendered DOM in place,
- * so keep the children static: prose, marketing copy, CMS-rendered HTML — the
- * content-block use case. For dynamic per-string values that React owns and
- * re-renders, use `useT()` instead.
+ * Content whose DOM is unknown until React renders it — a component, `lazy`, `Suspense`, or
+ * `dangerouslySetInnerHTML` — is rendered as it is, with an explicit `custom_id` stamped, and the
+ * core's DOM `Translate` class translates it after mount. On a server the core warns once per
+ * reason that such a block was served as source.
  */
 export function Translate({
     category = '',
@@ -60,34 +72,66 @@ export function Translate({
     className,
     children,
 }: TranslateProps) {
+    const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
     const hostRef = useRef<HTMLElement | null>(null);
     const instanceRef = useRef<VanillaTranslate>(undefined);
+    const mapped = toBlockNodes(children);
+    // `id` is the app's own id for the block: rendered and registered under it (MARK-1).
+    const options: BlockOptions = { category, params, label, ...(custom_id ? { id: custom_id } : {}) };
+    const rendered = mapped.ok ? renderBlock(mapped.nodes, options) : null;
+    const scope = currentRequestScope();
+    const underDomWalk = useContext(UnderDomWalk);
 
+    const register = (host?: Element) => {
+        if (!mapped.ok || !rendered || rendered.shape === 'empty' || underDomWalk) return;
+        // `host` lets the core check the block's ancestors for a resolved marker (GATE-10).
+        registerBlock(mapped.nodes, { ...options, host });
+    };
+    if (scope) {
+        // A server render: the scope holds the registration for close().
+        register();
+        if (!mapped.ok) warnUnrenderedBlock(mapped.reason);
+    }
+
+    const blockKey = rendered ? `${category}\u0000${custom_id}\u0000${rendered.customId}` : null;
+    useEffect(() => {
+        register(hostRef.current ?? undefined);
+        // Registration is one-shot per call: it runs again whenever `t` changes (a locale, a
+        // catalog or a route change) or the block's identity does.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, blockKey]);
+
+    // Unmappable content only: the core's DOM class walks and translates it after mount.
     useEffect(() => {
         const host = hostRef.current;
-        if (!host) return;
+        if (mapped.ok || !host) return;
         const instance = new VanillaTranslate(host, { category, custom_id, label, params });
         instanceRef.current = instance;
         return () => {
             instance.destroy();
             instanceRef.current = undefined;
         };
-        // Recreate only when the identity props change; param changes flow through setParams below.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category, custom_id, label]);
+    }, [mapped.ok, category, custom_id, label]);
 
-    // Re-render on changed params after mount, mirroring <Phrase>.
     useEffect(() => {
         instanceRef.current?.setParams(params);
     });
 
+    if (mapped.ok && rendered) {
+        return createElement(
+            tag,
+            { ref: hostRef, className, ...rendered.hostAttrs },
+            ...toReactNodes(rendered.nodes, mapped.elements),
+            ...mapped.portals,
+        );
+    }
     // An explicit `custom_id` is the block's identity as the app gave it, so the host carries it
-    // from the first render — on a server too, where the effect above never runs (spec MARK-1).
-    // A content-derived id is computed by the core's tokenizer on mount.
+    // from the first render — on a server too (spec MARK-1).
     return createElement(
         tag,
         { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
-        children,
+        createElement(UnderDomWalk.Provider, { value: true }, children),
     );
 }
 

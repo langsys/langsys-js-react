@@ -1,6 +1,18 @@
-import { createElement, useEffect, useRef } from 'react';
+import { createElement, useContext, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Phrase as VanillaPhrase, PHRASE_MARKER_ATTR, type ParamPrimitive } from 'langsys-js-typescript';
+import {
+    PHRASE_MARKER_ATTR,
+    Phrase as VanillaPhrase,
+    currentRequestScope,
+    registerBlock,
+    renderBlock,
+    warnUnrenderedBlock,
+    type BlockNode,
+    type ParamPrimitive,
+} from 'langsys-js-typescript';
+import { toBlockNodes, toReactNodes } from '../block-nodes.js';
+import { useT } from '../hooks.js';
+import { UnderDomWalk } from './dom-walk.js';
 
 /**
  * Props for the React `Phrase` component. Mirrors the Svelte component's props,
@@ -55,27 +67,64 @@ export interface PhraseProps {
  * subtree. For values React owns and re-renders, pass them through `params`.
  */
 export function Phrase({ category = '', params = {}, tag = 'span', className, children }: PhraseProps) {
+    const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
     const hostRef = useRef<HTMLElement | null>(null);
     const instanceRef = useRef<VanillaPhrase>(undefined);
+    const underDomWalk = useContext(UnderDomWalk);
+    const mapped = toBlockNodes(children);
+    // The phrase host itself is the unit: the core renders it as one rich phrase, whose inline
+    // elements a translation may reorder (MARK-4). Its elements' `source` indices count from 1.
+    const unit: BlockNode[] | null = mapped.ok
+        ? [{ tag, attrs: { [PHRASE_MARKER_ATTR]: '' }, children: mapped.nodes }]
+        : null;
+    const options = { category, params };
+    const rendered = unit ? renderBlock(unit, options) : null;
+    const scope = currentRequestScope();
+
+    const register = (host?: Element) => {
+        if (!unit || underDomWalk) return;
+        // `host` lets the core check the phrase's ancestors for a resolved marker (GATE-10),
+        // walking from its parent: the phrase element's own marker says it rendered a translation.
+        registerBlock(unit, { ...options, host });
+    };
+    if (scope) {
+        register();
+        if (!mapped.ok) warnUnrenderedBlock(mapped.reason);
+    }
 
     useEffect(() => {
+        register(hostRef.current ?? undefined);
+        // Registration is one-shot per call: it runs again whenever `t` changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, category, rendered ? JSON.stringify(unit) : null]);
+
+    // Unmappable content only: the core's DOM class translates it after mount.
+    useEffect(() => {
         const host = hostRef.current;
-        if (!host) return;
+        if (mapped.ok || !host) return;
         const instance = new VanillaPhrase(host, { category, params });
         instanceRef.current = instance;
         return () => {
             instance.destroy();
             instanceRef.current = undefined;
         };
-        // Recreate only when the category changes; param changes flow through setParams below.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category]);
+    }, [mapped.ok, category]);
 
-    // Re-render on a changed count/param after mount.
     useEffect(() => {
         instanceRef.current?.setParams(params);
     });
 
+    const host = rendered?.nodes[0];
+    if (mapped.ok && host && 'tag' in host) {
+        const { class: _class, ...hostAttrs } = host.attrs;
+        return createElement(
+            tag,
+            { ref: hostRef, className, ...hostAttrs },
+            ...toReactNodes(host.children, [createElement(tag), ...mapped.elements]),
+            ...mapped.portals,
+        );
+    }
     return createElement(tag, { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' }, children);
 }
 
