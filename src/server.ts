@@ -14,7 +14,7 @@ import {
     type RegistrationResult,
     type RequestScope,
     type RequestScopeOptions,
-    type iCategories,
+    type RequestSeed,
 } from 'langsys-js-typescript';
 
 export {
@@ -24,7 +24,10 @@ export {
     setRequestScopeStorage,
     type RequestScope,
     type RequestScopeOptions,
+    type RequestSeed,
     type ScopeMiss,
+    type SeededBlock,
+    type SeededPhrase,
     type ScopeStorage,
 } from 'langsys-js-typescript';
 
@@ -44,8 +47,12 @@ export function installRequestScopeStorage(): void {
 
 export interface RenderedInScope<T> {
     result: T;
-    /** Serialise into the page; on the client call `LangsysApp.seedCatalog(seed.catalog, seed.locale)` before hydrating. */
-    seed: { locale: string; catalog: iCategories };
+    /**
+     * Serialise into the page; on the client call
+     * `LangsysApp.seedCatalog(seed.catalog, seed.locale, seed)` before hydrating. Its blocks and
+     * phrases are what this render served and collected, so the client never registers them again.
+     */
+    seed: RequestSeed;
     /** Call after the response has been sent: hands this request's misses to the core to send (SRV-3). */
     close: () => Promise<RegistrationResult>;
 }

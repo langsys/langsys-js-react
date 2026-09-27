@@ -5,13 +5,14 @@
  * - A translation that reorders a phrase's inline markup moves the original React elements with
  *   it: each link keeps its own handler, on the client and through a server render and
  *   hydration with no mismatch.
- * - A block that holds a component cannot be rendered without a DOM (fleet rule): on a server it
- *   is served as its source with its explicit id, and the core warns once.
+ * - A block that holds a component cannot be rendered without a DOM (SRV-1's sanctioned exception):
+ *   on a server it is served as its source with its explicit id, and the core notices it once.
  */
 import { act, createElement as el } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { logger } from 'langsys-js-typescript';
 import { LangsysApp, Phrase, Translate } from './index.js';
 import { renderInRequestScope } from './server.js';
 import { catalog } from './test-helpers/ssr-scope.js';
@@ -69,7 +70,7 @@ describe('<Phrase> reordered by its translation', () => {
         await close();
         expect(html).toContain('privacidad');
 
-        LangsysApp.seedCatalog(seed.catalog, seed.locale);
+        LangsysApp.seedCatalog(seed.catalog, seed.locale, seed);
         const container = document.createElement('div');
         container.innerHTML = html;
         document.body.appendChild(container);
@@ -85,13 +86,29 @@ describe('<Phrase> reordered by its translation', () => {
     });
 });
 
+describe('the seed a scope hands the client (SRV-4)', () => {
+    it('carries each block it served, under the id stamped in the HTML', async () => {
+        const IT = catalog({ UI: { 'Hello world': 'Ciao mondo' } });
+        const { result: html, seed, close } = await renderInRequestScope({ locale: 'it', catalog: IT }, () =>
+            renderToString(el(Translate, { category: 'UI' }, el('p', null, 'Hello world'), el('p', null, 'Second line'))),
+        );
+        await close();
+        const id = /data-ls-contentblock="([^"]+)"/.exec(html)?.[1];
+        expect(id).toBeTruthy();
+        expect(seed.blocks[id!]).toMatchObject({ customId: id, category: 'UI', shape: 'block' });
+    });
+});
+
 describe('a block the tree path cannot render', () => {
     function Badge() {
         return el('b', null, 'New');
     }
 
-    it('on a server: source served, explicit id stamped, no resolved marker, and the core warns once', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('on a server: source served, explicit id stamped, no resolved marker, and the core notices it once', async () => {
+        // The notice is the core's, at debug level.
+        const debugWas = logger.debugEnabled;
+        logger.debugEnabled = true;
+        const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
         const tree = el(Translate, { category: 'UI', custom_id: 'promo' }, el('p', null, 'Hello world'), el(Badge));
         const { result: html, close } = await renderInRequestScope({ locale: 'es-es', catalog: ES }, async () => {
             // A block the binding declines to capture takes SRV-1's fallback and throws nothing (SRV-5).
@@ -102,7 +119,8 @@ describe('a block the tree path cannot render', () => {
         await close();
         expect(html).toBe('<translate data-ls-contentblock="promo"><p>Hello world</p><b>New</b></translate>');
         expect(html).not.toContain('data-ls-resolved');
-        const messages = warn.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('not rendered on the server'));
+        logger.debugEnabled = debugWas;
+        const messages = notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('was served as source'));
         expect(messages).toHaveLength(1);
     });
 });

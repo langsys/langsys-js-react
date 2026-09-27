@@ -34,7 +34,7 @@ app.get('*', async (req, res) => {
 
 - `renderInRequestScope({ locale, catalog?, url? }, render)` opens a scope, runs `render` inside it and resolves once it has finished. The scope fetches the locale's catalog at most once per request, shared read-only with other requests rendering the same locale; pass `catalog` when you already have it (from a snapshot or your own fetch).
 - Inside the render, `useT()` and `LangsysApp.t` read this request's catalog.
-- `seed` is `{ locale, catalog }`: exactly what this request rendered with.
+- `seed` is `{ locale, catalog, blocks, phrases }`: the catalog this request rendered with, the content blocks it served, and the misses it collected.
 - `close()` runs after the response has been sent. What it does with the misses is set by `ssrTokenStrategy` (below). It never throws, and calling it again returns the first result.
 
 Where your framework cannot wrap its render in a function, open the scope and enter it instead, in the request's own async function, before anything renders:
@@ -63,7 +63,7 @@ import { hydrateRoot } from 'react-dom/client';
 import { LangsysApp, createLocaleStore } from 'langsys-js-react';
 
 const seed = window.__LANGSYS_SEED__;
-LangsysApp.seedCatalog(seed.catalog, seed.locale); // synchronous
+LangsysApp.seedCatalog(seed.catalog, seed.locale, seed); // synchronous
 
 const localeStore = createLocaleStore(seed.locale);
 hydrateRoot(document.getElementById('root')!, <App localeStore={localeStore} />);
@@ -76,7 +76,7 @@ LangsysApp.init({
 });
 ```
 
-`seedCatalog` is synchronous and marks the locale as loaded, so `init()` does not fetch it again.
+`seedCatalog` is synchronous and marks the locale as loaded, so `init()` does not fetch it again. Passing the seed itself as the third argument hands over the content blocks the server rendered and the misses it collected, so the client never registers again what the server already collects. `<Translate>` and `<Phrase>` register themselves as they render, so nothing else is needed.
 
 ## Next.js
 
@@ -142,7 +142,7 @@ Pass `debug: true` to `init()` to log the SDK's lifecycle to the console, includ
 
 ## Important notes
 
-1. **Seed before hydrating.** Call `LangsysApp.seedCatalog(seed.catalog, seed.locale)` before `hydrateRoot`, with the seed from the same request. Seeding after hydration, or from another request, renders different text from the server's HTML.
+1. **Seed before hydrating.** Call `LangsysApp.seedCatalog(seed.catalog, seed.locale, seed)` before `hydrateRoot`, with the seed from the same request. Seeding after hydration, or from another request, renders different text from the server's HTML.
 2. **One scope per request.** Open a scope for every request and close it after that request's response. Never share one across requests: sharing one is exactly the cross-visitor leak the scope exists to prevent.
 3. **Data format.** A `catalog` passed to a scope must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
 4. **Keys.** Use a read-only API key in the browser — anything shipped in public JS is extractable. A write key belongs on the server, where `close()` can send a scope's misses with it under the `'server'` or `'auto'` strategy.

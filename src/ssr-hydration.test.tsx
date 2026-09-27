@@ -21,8 +21,8 @@ function Price() {
     return createElement('p', null, useT()('Pricing', 'UI'));
 }
 
-async function hydrate(html: string, seed: { locale: string; catalog: typeof IT }): Promise<unknown[]> {
-    LangsysApp.seedCatalog(seed.catalog, seed.locale);
+async function hydrate(html: string, seed: { locale: string; catalog: typeof IT } & Parameters<typeof LangsysApp.seedCatalog>[2]): Promise<unknown[]> {
+    LangsysApp.seedCatalog(seed.catalog, seed.locale, seed);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.appendChild(container);
