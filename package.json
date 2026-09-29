@@ -28,6 +28,26 @@
             "types": "./dist/server.d.ts",
             "import": "./dist/server.mjs",
             "require": "./dist/server.js"
+        },
+        "./babel": {
+            "types": "./dist/babel.d.ts",
+            "import": "./dist/babel.mjs",
+            "require": "./dist/babel.js"
+        },
+        "./vite": {
+            "types": "./dist/vite.d.ts",
+            "import": "./dist/vite.mjs",
+            "require": "./dist/vite.js"
+        },
+        "./next": {
+            "types": "./dist/next.d.ts",
+            "import": "./dist/next.mjs",
+            "require": "./dist/next.js"
+        },
+        "./next-loader": {
+            "types": "./dist/next-loader.d.ts",
+            "import": "./dist/next-loader.mjs",
+            "require": "./dist/next-loader.js"
         }
     },
     "files": [
@@ -67,11 +87,13 @@
         "react": "^18.0.0 || ^19.0.0"
     },
     "dependencies": {
+        "@babel/core": "^7.29.7",
         "langsys-js-typescript": "^0.6.5"
     },
     "devDependencies": {
         "@eslint/js": "^9.0.0",
         "@inertiajs/react": "^3.7.1",
+        "@types/babel__core": "^7.20.5",
         "@types/node": "^26.4.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",

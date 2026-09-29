@@ -1,5 +1,8 @@
 import re, glob, sys, json
-SRC = [f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f and '/test-helpers/' not in f]
+# Runtime source only: the placeholder transform and the Next config helper and loader are build
+# tooling (see _dev_/family-probes.py), and a Map in a Babel pass is not a lookup cache.
+BUILD_TIME = ('/transform/', 'src/next.ts', 'src/next-loader.ts')
+SRC = [f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f and '/test-helpers/' not in f and not any(b in f for b in BUILD_TIME)]
 EX  = [f for f in glob.glob('example/**/*.tsx', recursive=True)] + glob.glob('example/e2e/*.mjs')
 def strip(t):
     t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)

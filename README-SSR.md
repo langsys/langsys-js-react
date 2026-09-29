@@ -80,7 +80,7 @@ LangsysApp.init({
 
 ## Next.js
 
-Next renders the tree itself, in phases this package does not wrap, so it does not yet ship wiring for the App Router or the Pages Router. The calls are the ones above: open a scope in the async context that renders the request, hand `scope.seed()` to the page, and close it after the response (`after()` from `next/server`). Until this package ships and tests that wiring, a Next app initializes the SDK on the client only, with `LangsysApp.init()` in a Client Component's `useEffect`; server-rendered text is then source text until the client translates it.
+`withLangsys` from `langsys-js-react/next` adds the placeholder transform to both of Next's bundlers (see the README's *Variables in translated text*). Per-request server rendering of `useT()`, `<Translate>` and `<Phrase>` in the App Router is not shipped yet: Next renders server components and client components from separate copies of the SDK, so a scope opened in a server component is not visible to the client components rendering the same request. Until it is, a Next app initializes the SDK on the client, with `LangsysApp.init()` in a Client Component's `useEffect`, and server-rendered text in client components is source text until the client translates it.
 
 ## What a server render translates and discovers
 

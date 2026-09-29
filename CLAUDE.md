@@ -13,6 +13,8 @@ It is the React sibling of [`langsys-js-svelte`](https://github.com/langsys/lang
 ```
 src/
     server.ts                 # langsys-js-react/server (node-only): renderInRequestScope over the core's request scope (SRV-7)
+    transform/                # build-time only: the VAR-6 placeholder transform (babel.ts, naming.ts per VAR-2, run.ts), Vite plugin (vite.ts)
+    next.ts, next-loader.ts   # langsys-js-react/next: withLangsys(nextConfig) adds the transform as a Turbopack rule + webpack pre-loader
     index.ts                  # public exports — LangsysApp wrapper, hooks, Translate, raw signals, type re-exports
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
@@ -86,6 +88,11 @@ renderInRequestScope({locale, catalog?, url?}, render) -> { result, seed, close 
 installRequestScopeStorage()  // AsyncLocalStorage for the core; then createRequestScope + scope.enter() where a render can't be wrapped
 createRequestScope, currentRequestScope, setRequestScopeStorage, clearSharedCatalogs  // core, by reference
 
+// Build-time transform (VAR-6) — interpolations in <Translate>/<Phrase>/t() become named placeholders + params (VAR-2 names)
+langsys-js-react/vite        // default export: langsys() Vite plugin, enforce 'pre', only files importing the package
+langsys-js-react/babel       // default export: the Babel plugin
+langsys-js-react/next        // withLangsys(nextConfig): the transform in Turbopack (rules, not foreign, content-filtered) and webpack (enforce 'pre'); SWC stays on
+
 // Component
 <Translate category? custom_id? label? tag? className? children />
 
@@ -157,6 +164,7 @@ of it. This applies to every commit in this repo without exception.
 - **Keep the locale store stable.** Never call `createLocaleStore()` inside render without memoizing — use `useLocaleStore` or `useState(() => createLocaleStore(...))`.
 - **Don't route `writeEnabled` through `useSignal`.** `useWriteEnabled` deliberately calls `useSyncExternalStore` itself with `getServerSnapshot` pinned to a module-level `() => undefined`. React uses that snapshot for the hydration render as well as the server render, and `writeEnabled` is browser-authoritative — so passing the live getter makes a session whose authorization resolved before hydration render markup that disagrees with the server HTML, and React throws the subtree away. This is the one place a binding-authored decision is correct rather than a smell: the *value* still comes from the core, only *when React may read it* is React-specific. Verify any change here by mutation (unpin the snapshot and confirm tests go red), not by a passing test — the tests pass against a broken implementation unless authorization resolves before hydration.
 - **Server state lives in the core's request scope.** `src/server.ts` opens, runs and closes a scope and hands the core an `AsyncLocalStorage`; it keeps no request state of its own. `scope.enter()` holds only in the continuation that itself renders: a function the host awaits and returns from (middleware, a handler that returns before rendering, a helper) loses the scope on return, even when `enter()` follows its own `await`. Prefer `renderInRequestScope` / `scope.run()`.
+- **The transform is build tooling, not runtime.** `src/transform/`, `src/next.ts` and `src/next-loader.ts` never ship in the main bundle (`@babel/core` is external and only they import it) and are excluded from the runtime probes. Names follow VAR-2 in `naming.ts`; the shared naming vectors (`var-naming-vectors.json`, authored by the core) run against it once vendored.
 - **Never branch on capability.** `write_enabled` is server-computed because the same key can be write-enabled from one IP and read-only from another. The React layer surfaces it and never infers it. Likewise no caching of lookups, no network scheduling, and no config keys the base SDK doesn't define.
 
 ## Testing approach

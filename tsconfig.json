@@ -18,7 +18,9 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "verbatimModuleSyntax": true,
-        "outDir": "dist"
+        "outDir": "dist",
+        // Test fixtures import the package by name, as an app does (see vitest.config.ts).
+        "paths": { "langsys-js-react": ["./src/index.ts"] }
     },
     "include": ["src/**/*.ts", "src/**/*.tsx"],
     "exclude": ["node_modules", "dist", "example"]

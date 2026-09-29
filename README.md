@@ -200,7 +200,15 @@ A block whose children hold a component, `lazy`, `Suspense` or `dangerouslySetIn
 </Translate>
 ```
 
-`<Translate>` also accepts `params` for placeholder interpolation. Write placeholders as **`%key%`** directly in the markup — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting. Change `params` after mount and the block re-renders:
+Values in `<Translate>` and `<Phrase>` markup are placeholders. With the build transform enabled (one line of configuration, see [Variables in translated text](#variables-in-translated-text)), write them as you would any JSX:
+
+```tsx
+<Translate category="Cart">You have {items.length} items in your cart.</Translate>
+```
+
+The transform turns `{items.length}` into the placeholder `{items_count}` and passes the value as its param, so the sentence registers once — `You have {items_count} items in your cart.` — for every user and every count, and a translator can give it plural forms.
+
+Without the transform, write the placeholder yourself as **`%key%`** and pass the value in `params`:
 
 ```tsx
 <Translate category="Cart" params={{ count: itemCount }}>
@@ -208,20 +216,7 @@ A block whose children hold a component, `lazy`, `Suspense` or `dangerouslySetIn
 </Translate>
 ```
 
-> **Use `%key%` in `<Translate>`/`<Phrase>` markup, not bare `{key}`.** In JSX a literal `{count}` is a JavaScript expression that React evaluates *before* the SDK's DOM walker sees the text — the braces vanish and interpolation silently breaks (it still looks fine in the base locale, which hides it). Worse than breaking: the evaluated value is captured *as part of the phrase*, so every distinct value hashes to its own content block. `%count%` passes through JSX as plain text; the SDK normalizes it to canonical `{count}` at capture, so **translators and the catalog only ever see `{count}`**, and both spellings hash to the same content-block id. Keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left untouched. An unknown `%key%` with no matching param renders as `{key}` — matching `t()`'s behavior for unknown keys. (`t()` and the hooks keep `{key}`: JS strings reach the SDK literally, so there's no collision.)
-
-> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production, treats ICU slots as legitimate, and only re-warns when the set of param keys changes.
-
-Why that second consequence is the expensive one — measured against the shipped tokenizer (`tokenizeElement` + `generateCustomId`):
-
-```
-{count} evaluated by JSX              %count% placeholder
-  "You have 0 items"  31ff32bd…         "You have {count} items"  88642c82…
-  "You have 1 items"  5aa5eef5…         "You have {count} items"  88642c82…
-  "You have 2 items"  89f09f5e…         "You have {count} items"  88642c82…
-```
-
-The `%key%` spelling normalizes to canonical `{count}` at capture, so all values share one stable id. The JSX spelling registers a **new content block per distinct value** — wrap a live counter in `<Translate>` and you mint a catalog entry per tick. Nothing looks wrong while it happens: the base locale renders correctly throughout, and the damage shows up later as a Translation Manager full of near-duplicate junk.
+`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, and changing `params` re-renders the block. A bare `{count}` without the transform is evaluated by React before the SDK sees the text, so the value becomes part of the sentence and every distinct value is its own phrase: `You have 0 items`, `You have 1 items`, and so on.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
@@ -256,6 +251,44 @@ Built with <DontTranslate>Kangen®</DontTranslate> on <DontTranslate>langsys.dev
 Renders the host with `translate="no"`, which the base SDK's tokenizer and renderer already honor — the content is never tokenized, registered, or replaced.
 
 `<DontTranslate>` props: `tag?` (defaults to `span`), `className?`, `children`.
+
+## Variables in translated text
+
+A sentence that shows a value — a name, a count, a date — is one phrase however many values it is shown with. The build transform makes that automatic: inside `<Translate>`, `<Phrase>` and `t()` calls it turns each interpolated value into a named placeholder and passes the value as its param.
+
+```tsx
+<Translate>Hello {user.firstName}, welcome back</Translate>
+// registers "Hello {first_name}, welcome back"
+
+<Phrase>Signed in as <b>{user.name}</b></Phrase>
+// registers "Signed in as {m0o}{name}{m0c}"
+
+t(`You have ${inbox.count} new messages`)
+// registers "You have {inbox_count} new messages"
+```
+
+Enable it with one line, for your build tool:
+
+```ts
+// vite.config.ts
+import langsys from 'langsys-js-react/vite';
+export default defineConfig({ plugins: [langsys(), react()] });
+```
+
+```js
+// next.config.mjs — Turbopack and webpack; Next's own compiler stays on
+import { withLangsys } from 'langsys-js-react/next';
+export default withLangsys({ /* your config */ });
+```
+
+```json
+// babel.config.json — any other Babel setup
+{ "plugins": ["langsys-js-react/babel"] }
+```
+
+It only touches files that import `langsys-js-react`, and only `<Translate>` and `<Phrase>` imported from it and `t` obtained from `useT()`. String and number literals stay text; JSX, conditionals and components inside a block are left as they are.
+
+**Names** come from the expression, in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`). An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, … and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
 
 ## Hooks & reactive primitives
 

@@ -15,7 +15,14 @@ Usage: python3 _dev_/family-probes.py [--json OUT]   exit 1 if any control is ze
 """
 import glob, json, re, sys
 
-SRC = sorted(f for f in glob.glob('src/**/*.ts*', recursive=True) if '.test.' not in f and '/test-helpers/' not in f)
+# The runtime binding only. Build-time tooling — the placeholder transform (src/transform/) and the
+# Next config helper and loader — runs in a bundler, never in an app, so it cannot participate in
+# the core's runtime behaviour these families guard.
+BUILD_TIME = ('/transform/', 'src/next.ts', 'src/next-loader.ts')
+SRC = sorted(
+    f for f in glob.glob('src/**/*.ts*', recursive=True)
+    if '.test.' not in f and '/test-helpers/' not in f and not any(b in f for b in BUILD_TIME)
+)
 assert len(SRC) >= 6, f'read {len(SRC)} source files; expected >= 6 — probes would report false zeros'
 
 def strip(text):
