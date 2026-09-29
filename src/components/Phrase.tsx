@@ -10,7 +10,8 @@ import {
     type BlockNode,
     type ParamPrimitive,
 } from 'langsys-js-typescript';
-import { toBlockNodes, toReactNodes } from '../block-nodes.js';
+import * as core from 'langsys-js-typescript';
+import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { UnderDomWalk } from './dom-walk.js';
 
@@ -77,12 +78,16 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     const unit: BlockNode[] | null = mapped.ok
         ? [{ tag, attrs: { [PHRASE_MARKER_ATTR]: '' }, children: mapped.nodes }]
         : null;
-    const options = { category, params };
+    // A value interpolated without the build transform cannot be named, so the unit registers
+    // nothing (VAR-7); what the catalog already holds still renders.
+    const unnamedValues = hasRuntimeValues(children);
+    const options = { category, params, ...(unnamedValues ? { register: false } : {}) };
     const rendered = unit ? renderBlock(unit, options) : null;
     const scope = currentRequestScope();
 
     const register = (host?: Element) => {
         if (!unit || underDomWalk) return;
+        if (unnamedValues) return warnUnnamed();
         // `host` lets the core check the phrase's ancestors for a resolved marker (GATE-10),
         // walking from its parent: the phrase element's own marker says it rendered a translation.
         registerBlock(unit, { ...options, host });
@@ -102,7 +107,12 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     useEffect(() => {
         const host = hostRef.current;
         if (mapped.ok || !host) return;
-        const instance = new VanillaPhrase(host, { category, params });
+        if (unnamedValues) warnUnnamed();
+        const instance = new VanillaPhrase(host, {
+            category,
+            params,
+            ...(unnamedValues ? { register: false } : {}),
+        } as ConstructorParameters<typeof VanillaPhrase>[1]);
         instanceRef.current = instance;
         return () => {
             instance.destroy();
@@ -126,6 +136,13 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
         );
     }
     return createElement(tag, { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' }, children);
+}
+
+/** The core's once-per-reason debug notice for a unit it did not register (VAR-7). */
+function warnUnnamed(): void {
+    (core as unknown as { warnUnregistered?: (reason: string) => void }).warnUnregistered?.(
+        'a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)',
+    );
 }
 
 export default Phrase;

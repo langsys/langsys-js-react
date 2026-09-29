@@ -113,3 +113,31 @@ export function toReactNodes(nodes: readonly RenderedNode[], elements: readonly 
         return [kids.length ? cloneElement(original, changed, ...kids) : cloneElement(original, { ...changed, children: undefined } as Partial<unknown>)];
     });
 }
+
+/**
+ * Whether children carry a value from a variable that no build step turned into a placeholder
+ * (spec VAR-7). Literal JSX text reaches React as one string per run, so a text run split across
+ * adjacent children — a string beside a number, or two strings that are not whitespace-only —
+ * holds an interpolation (`Hello {name}` arrives as `['Hello ', 'Ana']`). Checked at every level
+ * of host elements and fragments. A value that is the only text of its element (`<b>{name}</b>`)
+ * cannot be told from literal text at runtime; only the build transform recovers it.
+ */
+export function hasRuntimeValues(children: ReactNode): boolean {
+    let run: Array<string | number | bigint> = [];
+    const flush = () => {
+        const hit = run.some((p) => typeof p !== 'string') || run.filter((p) => String(p).trim() !== '').length > 1;
+        run = [];
+        return hit;
+    };
+    for (const c of [...Children.toArray(children), null]) {
+        if (typeof c === 'string' || typeof c === 'number' || typeof c === 'bigint') {
+            run.push(c);
+            continue;
+        }
+        if (flush()) return true;
+        if (isValidElement(c) && (typeof c.type === 'string' || c.type === Fragment)) {
+            if (hasRuntimeValues((c.props as { children?: ReactNode }).children)) return true;
+        }
+    }
+    return false;
+}

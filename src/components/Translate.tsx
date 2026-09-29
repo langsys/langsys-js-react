@@ -10,7 +10,8 @@ import {
     type BlockOptions,
     type ParamPrimitive,
 } from 'langsys-js-typescript';
-import { toBlockNodes, toReactNodes } from '../block-nodes.js';
+import * as core from 'langsys-js-typescript';
+import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { UnderDomWalk } from './dom-walk.js';
 
@@ -77,13 +78,23 @@ export function Translate({
     const instanceRef = useRef<VanillaTranslate>(undefined);
     const mapped = toBlockNodes(children);
     // `id` is the app's own id for the block: rendered and registered under it (MARK-1).
-    const options: BlockOptions = { category, params, label, ...(custom_id ? { id: custom_id } : {}) };
+    // A value interpolated without the build transform cannot be named, so the unit registers
+    // nothing (VAR-7); what the catalog already holds still renders.
+    const unnamedValues = hasRuntimeValues(children);
+    const options: BlockOptions = {
+        category,
+        params,
+        label,
+        ...(custom_id ? { id: custom_id } : {}),
+        ...(unnamedValues ? { register: false } : {}),
+    } as BlockOptions;
     const rendered = mapped.ok ? renderBlock(mapped.nodes, options) : null;
     const scope = currentRequestScope();
     const underDomWalk = useContext(UnderDomWalk);
 
     const register = (host?: Element) => {
         if (!mapped.ok || !rendered || rendered.shape === 'empty' || underDomWalk) return;
+        if (unnamedValues) return warnUnnamed();
         // `host` lets the core check the block's ancestors for a resolved marker (GATE-10).
         registerBlock(mapped.nodes, { ...options, host });
     };
@@ -105,7 +116,14 @@ export function Translate({
     useEffect(() => {
         const host = hostRef.current;
         if (mapped.ok || !host) return;
-        const instance = new VanillaTranslate(host, { category, custom_id, label, params });
+        if (unnamedValues) warnUnnamed();
+        const instance = new VanillaTranslate(host, {
+            category,
+            custom_id,
+            label,
+            params,
+            ...(unnamedValues ? { register: false } : {}),
+        } as ConstructorParameters<typeof VanillaTranslate>[1]);
         instanceRef.current = instance;
         return () => {
             instance.destroy();
@@ -132,6 +150,13 @@ export function Translate({
         tag,
         { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
         createElement(UnderDomWalk.Provider, { value: true }, children),
+    );
+}
+
+/** The core's once-per-reason debug notice for a unit it did not register (VAR-7). */
+function warnUnnamed(): void {
+    (core as unknown as { warnUnregistered?: (reason: string) => void }).warnUnregistered?.(
+        'a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)',
     );
 }
 
