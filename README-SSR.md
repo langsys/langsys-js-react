@@ -80,7 +80,41 @@ LangsysApp.init({
 
 ## Next.js
 
-`withLangsys` from `langsys-js-react/next` adds the placeholder transform to both of Next's bundlers (see the README's *Variables in translated text*). Per-request server rendering of `useT()`, `<Translate>` and `<Phrase>` in the App Router is not shipped yet: Next renders server components and client components from separate copies of the SDK, so a scope opened in a server component is not visible to the client components rendering the same request. Until it is, a Next app initializes the SDK on the client, with `LangsysApp.init()` in a Client Component's `useEffect`, and server-rendered text in client components is source text until the client translates it.
+In the App Router, server components and client components are built against separate copies of the SDK, so a scope opened in a server component is not visible to the client components rendering the same request. The request's **seed** crosses that boundary instead: the root layout opens the scope and passes its seed to `<LangsysProvider>`, which rebuilds the scope on the client-component side.
+
+```js
+// next.config.mjs — the placeholder transform, in Turbopack and webpack
+import { withLangsys } from 'langsys-js-react/next';
+export default withLangsys({ /* your config */ });
+```
+
+```tsx
+// app/langsys-client.tsx — this package ships no 'use client' directive, so re-export through one
+'use client';
+export { LangsysProvider, Translate, Phrase, DontTranslate } from 'langsys-js-react';
+```
+
+```tsx
+// app/layout.tsx — a server component
+import { createRequestScope } from 'langsys-js-react/server';
+import { LangsysProvider } from './langsys-client';
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+    const locale = await resolveLocale(); // your app's own resolution: route segment, cookie, header
+    const scope = await createRequestScope({ locale });
+    return (
+        <html lang={locale}>
+            <body>
+                <LangsysProvider seed={scope.seed()}>{children}</LangsysProvider>
+            </body>
+        </html>
+    );
+}
+```
+
+Under the provider, `useT()`, `useCurrentLocale()`, `useTranslations()`, `<Translate>` and `<Phrase>` render the request's locale and catalog on the server, and the browser hydrates from the same catalog, so the first client render matches the served HTML. Initialize the SDK in the browser as usual (`LangsysApp.init()` in a Client Component's `useEffect`); the provider has already seeded it with the request's catalog.
+
+Content a client component misses during the server render is registered by the browser after hydration. Under the `server` SSR strategy those misses are not sent from the server, because the provider's side of the render has no after-response hook.
 
 ## What a server render translates and discovers
 

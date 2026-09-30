@@ -1,5 +1,6 @@
-import { useSyncExternalStore } from 'react';
+import { useContext, useSyncExternalStore } from 'react';
 import { createSignal, type Signal } from 'langsys-js-typescript';
+import { SeedScope } from './components/LangsysProvider.js';
 
 /**
  * Subscribe a React component to a base-SDK `Signal<T>` and return its current
@@ -10,11 +11,10 @@ import { createSignal, type Signal } from 'langsys-js-typescript';
  * the React wrapper adapts the SDK's signals *out* to the render cycle. It is
  * built on `useSyncExternalStore`, so it is concurrent-safe: a render never
  * observes two different values of the same signal (no tearing). On the
- * server, the snapshot reads the signal's current value — whatever has been
- * seeded into it (the core's synchronous `seedCatalog()`), or nothing. Those
- * signals are process-global, so concurrent server requests share them
- * (spec SRV-2, recorded `not implemented` in CONFORMANCE.md). `init()` in a
- * `useEffect` never runs on the server, so it seeds nothing there.
+ * server the snapshot reads the value for the current request: inside a core
+ * request scope the signals answer from the scope, and under a
+ * `<LangsysProvider seed>` the server snapshot — used for the server render and
+ * the hydration render — reads through the scope the provider rebuilt.
  *
  * The base SDK's signals are stable between changes (every `set` replaces the
  * value, so `.get()` returns a fresh reference only after a real change). That
@@ -27,7 +27,8 @@ import { createSignal, type Signal } from 'langsys-js-typescript';
  * every render would resubscribe on every render.
  */
 export function useSignal<T>(signal: Signal<T>): T {
-    return useSyncExternalStore(signal.subscribe, signal.get, signal.get);
+    const scope = useContext(SeedScope);
+    return useSyncExternalStore(signal.subscribe, signal.get, scope ? () => scope.run(signal.get) : signal.get);
 }
 
 /**

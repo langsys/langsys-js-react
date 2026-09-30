@@ -14,6 +14,7 @@ import {
 import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { UnderDomWalk } from './dom-walk.js';
+import { useSeedScopeRunner } from './LangsysProvider.js';
 
 /**
  * Props for the React `Translate` component. Mirrors the Svelte component's
@@ -88,7 +89,9 @@ export function Translate({
         ...(custom_id ? { id: custom_id } : {}),
         ...(unnamedValues ? { register: false } : {}),
     };
-    const rendered = mapped.ok ? renderBlock(mapped.nodes, options) : null;
+    // Under a <LangsysProvider>, the server and hydration renders read the request's scope.
+    const inSeedScope = useSeedScopeRunner();
+    const rendered = mapped.ok ? inSeedScope(() => renderBlock(mapped.nodes, options)) : null;
     const scope = currentRequestScope();
     const underDomWalk = useContext(UnderDomWalk);
 

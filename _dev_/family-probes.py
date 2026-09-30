@@ -58,8 +58,9 @@ FAMILIES = {
     # Re-exporting the core's LegacyFormatError / LegacyKeyFile is not participation; resolving,
     # converting or rewriting the option would be.
     'MIG':   (r'legacyKeys\s*[:=]|setLegacyKeys\(|convertLegacy|createLegacyKeys|[Mm]igrat|i18next|trans_choice|\{\{', r'\buseT\b'),
-    # Re-exporting SnapshotError / CatalogSnapshot is not participation; loading, parsing or seeding would be.
-    'SNAP':  (r'loadSnapshot\(|parseSnapshot|buildSnapshot|snapshotChecksum|seedCatalog|initialTranslations\s*[:=]', r'\bLangsysApp\b'),
+    # Loading or parsing a snapshot is the core's. Seeding the page with a request's catalog before
+    # hydration (<LangsysProvider>'s seedCatalog) is SRV-4's binding half, graded there, not here.
+    'SNAP':  (r'loadSnapshot\(|parseSnapshot|buildSnapshot|snapshotChecksum|initialTranslations\s*[:=]', r'\bLangsysApp\b'),
     # SRV-6: choosing a locale from the request. The AsyncLocalStorage src/server.ts hands the core
     # for SRV-7 is not locale resolution, so it is not in this pattern.
     'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|\bVary\b|searchParams|req\.url|request\.url', r'\buseSyncExternalStore\b'),

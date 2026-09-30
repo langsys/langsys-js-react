@@ -14,6 +14,7 @@ import {
 import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { UnderDomWalk } from './dom-walk.js';
+import { useSeedScopeRunner } from './LangsysProvider.js';
 
 /**
  * Props for the React `Phrase` component. Mirrors the Svelte component's props,
@@ -82,7 +83,9 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     // nothing (VAR-7); what the catalog already holds still renders.
     const unnamedValues = hasRuntimeValues(children);
     const options = { category, params, ...(unnamedValues ? { register: false } : {}) };
-    const rendered = unit ? renderBlock(unit, options) : null;
+    // Under a <LangsysProvider>, the server and hydration renders read the request's scope.
+    const inSeedScope = useSeedScopeRunner();
+    const rendered = unit ? inSeedScope(() => renderBlock(unit, options)) : null;
     const scope = currentRequestScope();
 
     const register = (host?: Element) => {

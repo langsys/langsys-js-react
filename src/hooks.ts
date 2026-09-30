@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
     currentlyLoadedLocale,
     notifyNavigation,
@@ -9,6 +9,7 @@ import {
 } from 'langsys-js-typescript';
 import type { ServerMessage, Signal, TFunction, iCategories } from 'langsys-js-typescript';
 import { createLocaleStore, useSignal } from './adapters.js';
+import { SeedScope, useSeedScopeRunner } from './components/LangsysProvider.js';
 
 /**
  * The current translation function, re-rendering the calling component whenever
@@ -23,7 +24,10 @@ import { createLocaleStore, useSignal } from './adapters.js';
  * type-checked against the params object at the call site.
  */
 export function useT(): TFunction {
-    return useSignal(tSignal);
+    // Under a <LangsysProvider>, the server and hydration renders use the scope's own `t`, which
+    // looks phrases up in the request's catalog whenever it is called.
+    const scope = useContext(SeedScope);
+    return useSyncExternalStore(tSignal.subscribe, tSignal.get, scope ? () => scope.t : tSignal.get);
 }
 
 /**
@@ -142,5 +146,10 @@ export function useRenderServerMessage(): (entry: ServerMessage, category?: stri
     // `t` is the dependency on purpose: it changes whenever the catalog or locale does, which
     // is when a render must be redone. The core reads the current catalog itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return useMemo(() => (entry: ServerMessage, category?: string) => renderServerMessage(entry, category), [t]);
+    const inSeedScope = useSeedScopeRunner();
+    return useMemo(
+        () => (entry: ServerMessage, category?: string) => inSeedScope(() => renderServerMessage(entry, category)),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [t],
+    );
 }
