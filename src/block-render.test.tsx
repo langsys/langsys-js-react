@@ -12,8 +12,7 @@ import { act, createElement as el } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { logger } from 'langsys-js-typescript';
-import { LangsysApp, Phrase, Translate } from './index.js';
+import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
 import { renderInRequestScope } from './server.js';
 import { catalog } from './test-helpers/ssr-scope.js';
 
@@ -105,21 +104,26 @@ describe('a block the tree path cannot render', () => {
     }
 
     it('on a server: source served, explicit id stamped, no resolved marker, and the core notices it once', async () => {
-        // The notice is the core's, at debug level.
-        const debugWas = logger.debugEnabled;
-        logger.debugEnabled = true;
         const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
         const tree = el(Translate, { category: 'UI', custom_id: 'promo' }, el('p', null, 'Hello world'), el(Badge));
         const { result: html, close } = await renderInRequestScope({ locale: 'es-es', catalog: ES }, async () => {
             // A block the binding declines to capture takes SRV-1's fallback and throws nothing (SRV-5).
             expect(() => renderToString(tree)).not.toThrow();
-            const first = renderToString(tree);
-            return first;
+            return renderToString(tree);
         });
         await close();
         expect(html).toBe('<translate data-ls-contentblock="promo"><p>Hello world</p><b>New</b></translate>');
         expect(html).not.toContain('data-ls-resolved');
-        logger.debugEnabled = debugWas;
+
+        // The core holds a notice raised before init() until debug is known; init settles it
+        // synchronously, before any network call (which may fail: the core never throws on it).
+        void LangsysApp.init({
+            projectid: 'p',
+            key: 'k',
+            UserLocaleStore: createLocaleStore('es-es'),
+            debug: true,
+            apiUrl: 'http://127.0.0.1:9',
+        } as never).catch(() => {});
         const messages = notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('was served as source'));
         expect(messages).toHaveLength(1);
     });

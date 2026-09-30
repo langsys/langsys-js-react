@@ -105,6 +105,10 @@ export { LegacyFormatError } from 'langsys-js-typescript';
 // `reason` names why (spec SNAP-2, SNAP-3).
 export { SnapshotError } from 'langsys-js-typescript';
 
+// The request header naming the current locale, for an app's calls to its own API (spec FRM-6).
+// Re-exported by reference: `fetch(url, { headers: { ...localeHeaders() } })`.
+export { localeHeaders } from 'langsys-js-typescript';
+
 // Locale canonicalization (BCP 47) — the SDK canonicalizes all locale input
 // (v0.3.0+); re-exported so consumers can normalize their own values the same
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.

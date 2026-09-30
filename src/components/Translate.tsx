@@ -7,10 +7,10 @@ import {
     registerBlock,
     renderBlock,
     warnUnrenderedBlock,
+    warnUnregistered,
     type BlockOptions,
     type ParamPrimitive,
 } from 'langsys-js-typescript';
-import * as core from 'langsys-js-typescript';
 import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { UnderDomWalk } from './dom-walk.js';
@@ -87,7 +87,7 @@ export function Translate({
         label,
         ...(custom_id ? { id: custom_id } : {}),
         ...(unnamedValues ? { register: false } : {}),
-    } as BlockOptions;
+    };
     const rendered = mapped.ok ? renderBlock(mapped.nodes, options) : null;
     const scope = currentRequestScope();
     const underDomWalk = useContext(UnderDomWalk);
@@ -123,7 +123,7 @@ export function Translate({
             label,
             params,
             ...(unnamedValues ? { register: false } : {}),
-        } as ConstructorParameters<typeof VanillaTranslate>[1]);
+        });
         instanceRef.current = instance;
         return () => {
             instance.destroy();
@@ -155,9 +155,7 @@ export function Translate({
 
 /** The core's once-per-reason debug notice for a unit it did not register (VAR-7). */
 function warnUnnamed(): void {
-    (core as unknown as { warnUnregistered?: (reason: string) => void }).warnUnregistered?.(
-        'a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)',
-    );
+    warnUnregistered('a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)');
 }
 
 export default Translate;

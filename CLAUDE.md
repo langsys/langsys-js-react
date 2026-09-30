@@ -23,7 +23,7 @@ src/
     test-helpers/             # contract-fixture launcher; SSR RequestAdapter harness (ssr-scope.ts)
     *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
 contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
-vectors/                      # shared vector files, vendored byte-exact from langsys-js-typescript — never edit
+vectors/                      # shared vector files (server messages, var naming), vendored byte-exact from langsys-js-typescript — never edit
 example/                      # Vite playground (npm run dev) — not published
 ```
 
@@ -67,6 +67,7 @@ useSignal(signal)       -> T               // low-level Signal → value bridge
 createLocaleStore(initial?)  // Signal<string> — the writable analog
 t, currentlyLoadedLocale, sTranslations  // raw Signals; prefer the hooks in components
 createSignal                 // re-exported generic Signal factory
+localeHeaders()              // re-exported by reference (FRM-6): { 'Accept-Language': current locale } for the app's own API calls
 canonicalizeLocale(locale)   // re-exported BCP 47 normalizer — LOWERCASES ('en-US' → 'en-us'), per WIRE-3; the SDK canonicalizes all locale input since base 0.3.0
 
 // Write gating (ticket 838; requires the unreleased base SDK build that carries it)
@@ -164,7 +165,7 @@ of it. This applies to every commit in this repo without exception.
 - **Keep the locale store stable.** Never call `createLocaleStore()` inside render without memoizing — use `useLocaleStore` or `useState(() => createLocaleStore(...))`.
 - **Don't route `writeEnabled` through `useSignal`.** `useWriteEnabled` deliberately calls `useSyncExternalStore` itself with `getServerSnapshot` pinned to a module-level `() => undefined`. React uses that snapshot for the hydration render as well as the server render, and `writeEnabled` is browser-authoritative — so passing the live getter makes a session whose authorization resolved before hydration render markup that disagrees with the server HTML, and React throws the subtree away. This is the one place a binding-authored decision is correct rather than a smell: the *value* still comes from the core, only *when React may read it* is React-specific. Verify any change here by mutation (unpin the snapshot and confirm tests go red), not by a passing test — the tests pass against a broken implementation unless authorization resolves before hydration.
 - **Server state lives in the core's request scope.** `src/server.ts` opens, runs and closes a scope and hands the core an `AsyncLocalStorage`; it keeps no request state of its own. `scope.enter()` holds only in the continuation that itself renders: a function the host awaits and returns from (middleware, a handler that returns before rendering, a helper) loses the scope on return, even when `enter()` follows its own `await`. Prefer `renderInRequestScope` / `scope.run()`.
-- **The transform is build tooling, not runtime.** `src/transform/`, `src/next.ts` and `src/next-loader.ts` never ship in the main bundle (`@babel/core` is external and only they import it) and are excluded from the runtime probes. Names follow VAR-2 in `naming.ts`; the shared naming vectors (`var-naming-vectors.json`, authored by the core) run against it once vendored.
+- **The transform is build tooling, not runtime.** `src/transform/`, `src/next.ts` and `src/next-loader.ts` never ship in the main bundle (`@babel/core` is external and only they import it) and are excluded from the runtime probes. Names are the core's (`derivePlaceholderNames`, VAR-2); `naming.ts` only maps a Babel expression onto the core's `ExpressionShape`, and the vendored `vectors/var-naming-vectors.json` checks both the mapping and the names.
 - **Never branch on capability.** `write_enabled` is server-computed because the same key can be write-enabled from one IP and read-only from another. The React layer surfaces it and never infers it. Likewise no caching of lookups, no network scheduling, and no config keys the base SDK doesn't define.
 
 ## Testing approach

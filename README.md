@@ -216,7 +216,9 @@ Without the transform, write the placeholder yourself as **`%key%`** and pass th
 </Translate>
 ```
 
-`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, and changing `params` re-renders the block. A bare `{count}` without the transform is evaluated by React before the SDK sees the text, so the value becomes part of the sentence and every distinct value is its own phrase: `You have 0 items`, `You have 1 items`, and so on.
+`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, and changing `params` re-renders the block.
+
+Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
@@ -288,7 +290,7 @@ export default withLangsys({ /* your config */ });
 
 It only touches files that import `langsys-js-react`, and only `<Translate>` and `<Phrase>` imported from it and `t` obtained from `useT()`. String and number literals stay text; JSX, conditionals and components inside a block are left as they are.
 
-**Names** come from the expression, in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`). An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, … and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
+**Names** are the same in every Langsys SDK, derived from the expression in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`). An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, … and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
 
 ## Hooks & reactive primitives
 
@@ -492,6 +494,16 @@ const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Lang
 ```
 
 The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and is script-aware via CLDR likely-subtags (base SDK 0.3.0+): `zh-TW` matches `zh-Hant` and never falls back to `zh-Hans`. Results are returned in the SDK's canonical form, which is **lowercase** (`en-us`, `zh-hant`) — see the note under [Initialization](#initialization); it returns `false` if no match.
+
+### Asking your own API for the user's language
+
+`localeHeaders()` returns the request header for the locale the user chose, so your app's calls to its own API answer in that language:
+
+```ts
+import { localeHeaders } from 'langsys-js-react';
+
+fetch('/api/orders', { headers: { ...localeHeaders() } }); // Accept-Language: es-es
+```
 
 ### Waiting for translations to load
 

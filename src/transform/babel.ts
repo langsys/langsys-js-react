@@ -66,6 +66,12 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
         return out;
     };
 
+    /** One entry per expression: the same expression twice is one placeholder and one param. */
+    const distinct = (named: Named[]): Named[] => {
+        const seen = new Set<string>();
+        return named.filter((n) => !seen.has(n.source) && seen.add(n.source));
+    };
+
     const mergeParams = (existing: t.Expression | null, named: Named[]): t.Expression => {
         const props = named.map((n) => T.objectProperty(T.identifier(n.name), n.expression));
         if (!existing) return T.objectExpression(props);
@@ -125,7 +131,7 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
                 ? existing.value.expression
                 : null;
 
-        const named = nameAll(found, explicitNames(texts, existingExpr));
+        const named = distinct(nameAll(found, explicitNames(texts, existingExpr)));
         const bySource = new Map(named.map((n) => [n.source, n]));
         for (const f of found) f.replace(`%${bySource.get(f.source)!.name}%`);
         named.forEach((n) => warn(state, n));
@@ -177,7 +183,7 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             .filter((p): p is t.Expression => typeof p !== 'string')
             .map((e) => ({ source: sourceOf(state, e), expression: e }));
         const paramsExpr = (params as t.Expression | undefined) ?? null;
-        const named = nameAll(values, explicitNames([], paramsExpr));
+        const named = distinct(nameAll(values, explicitNames([], paramsExpr)));
         const bySource = new Map(named.map((n) => [n.source, n.name]));
         const text = parts.map((p) => (typeof p === 'string' ? p : `{${bySource.get(sourceOf(state, p))}}`)).join('');
         named.forEach((n) => warn(state, n));

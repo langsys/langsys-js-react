@@ -6,11 +6,12 @@
  * children; this binding can tell that much but cannot name the value, so the unit registers
  * nothing, while a static unit rendered beside it registers as before. Built with
  * `createElement`, which the build transform does not rewrite. Measured against the contract
- * fixture's stored state, for two users each.
+ * fixture's stored state, for two users each. The core reports the unit once, as a debug notice.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, createElement as el, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { logger } from 'langsys-js-typescript';
 import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
 
@@ -78,11 +79,24 @@ describe('values the build transform did not rewrite', () => {
     }, 60_000);
 
     // The DOM-class path: a block holding a component falls back to the core's Translate class,
-    // which needs the core's `register: false`. Recorded as it.fails until the core honours it.
-    it.fails('a fallback block (it holds a component) with an interpolated value registers nothing either', async () => {
+    // which honours the same `register: false`.
+    it('a fallback block (it holds a component) with an interpolated value registers nothing either', async () => {
         const Badge = () => el('b', null, 'new');
         for (const name of ['Ana', 'Bo']) await show(el(Translate, { category: 'D' }, el('p', null, 'Welcome ', name), el(Badge)));
         await sleep(1500);
         expect((await stored()).filter((s) => s.startsWith('D:'))).toEqual([]);
     }, 60_000);
+
+    it('the core reports it once, as a debug notice naming the transform', async () => {
+        const debugWas = logger.debugEnabled;
+        logger.debugEnabled = true;
+        const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
+        for (const name of ['Cy', 'Di']) await show(el(Translate, { category: 'E' }, 'Bye ', name));
+        logger.debugEnabled = debugWas;
+        const messages = notice.mock.calls
+            .map((c) => c.join(' '))
+            .filter((m) => m.includes('a value interpolated without the build transform'));
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('langsys-js-react/vite, /babel or /next');
+    }, 30_000);
 });

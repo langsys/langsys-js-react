@@ -1,40 +1,21 @@
 /**
  * Placeholder names for interpolated expressions (spec VAR-2).
  *
- * A name matches `[a-z][a-z0-9_]*` and is derived from the expression that produced the value:
+ * The names are the core's: `derivePlaceholderNames` decides them for every SDK from each
+ * expression's shape, so the same expression gets the same name everywhere. This module only maps
+ * a Babel expression onto that shape:
  *
- * - an identifier: itself, in snake_case (`firstName` → `first_name`)
- * - a member chain: its last segment (`user.name` → `name`)
- * - a chain ending in `length`, `size` or `count`: the previous segment plus `_count`
- *   (`items.length` → `items_count`)
- * - a chain ending in `value` or `current`: the previous segment (`price.value` → `price`)
- * - a call with one argument: the argument's name (`formatDate(order.date)` → `date`)
- * - anything else: unnameable — `value`, `value_2`, …, with a build warning
+ * - an identifier → `{ identifier }`
+ * - a member chain (optional or not, type wrappers ignored) → `{ member: [segments] }`
+ * - a call → `{ call: { callee, args: [shapes] } }` (the core names one with a single argument)
+ * - a computed member, a binary, logical or conditional expression, a template literal, a call
+ *   with a spread argument, anything else → `{ other }`
  *
- * Within one phrase, a name several different expressions derive is prefixed with each one's
- * previous segment (`a.name`, `b.name` → `a_name`, `b_name`), and whatever still collides is
- * suffixed `_2`, `_3`. The same expression twice is one placeholder. `m<N>o` / `m<N>c` are the
- * `<Phrase>` markup tokens and are never produced. A name the developer wrote explicitly — a
- * `%name%` with its param — is taken, and a derived name avoids it.
+ * A name the developer wrote explicitly elsewhere in the phrase — a `%name%` in its text, a key of
+ * its `params` — is passed to the core as taken, so a derived name avoids it.
  */
 import type { types as t } from '@babel/core';
-
-const COUNT = new Set(['length', 'size', 'count']);
-const PASS_THROUGH = new Set(['value', 'current']);
-const RESERVED = /^m\d+[oc]$/;
-const VALID = /^[a-z][a-z0-9_]*$/;
-
-/** `firstName` → `first_name`, `userID` → `user_id`; null when nothing valid remains. */
-export function snakeCase(name: string): string | null {
-    const out = name
-        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-        .toLowerCase()
-        .replace(/[^a-z0-9_]+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_+|_+$/g, '');
-    return VALID.test(out) ? out : null;
-}
+import { derivePlaceholderNames, type ExpressionShape } from 'langsys-js-typescript/pure';
 
 /** An expression with type-only wrappers removed. */
 function unwrap(e: t.Node): t.Node {
@@ -51,7 +32,7 @@ function unwrap(e: t.Node): t.Node {
     return n;
 }
 
-/** The static segments of a member chain, outermost last; null when any segment is computed. */
+/** The static segments of a member chain; null when any segment is computed. */
 function segments(e: t.Node): string[] | null {
     const n = unwrap(e);
     if (n.type === 'Identifier') return [n.name];
@@ -64,99 +45,55 @@ function segments(e: t.Node): string[] | null {
     return null;
 }
 
-/** What a derived name is, before collisions: the name, and the segment a collision prefixes. */
-export interface BaseName {
-    name: string | null;
-    previous: string | null;
-}
-
-export function baseName(e: t.Node): BaseName {
+/** The shape of an expression, as the core's naming reads it. */
+export function shapeOf(e: t.Node): ExpressionShape {
     const n = unwrap(e);
+    if (n.type === 'Identifier') return { identifier: n.name };
+    if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') {
+        const segs = segments(n);
+        return segs && segs.length ? { member: segs } : { other: 'computed' };
+    }
     if (n.type === 'CallExpression' || n.type === 'OptionalCallExpression') {
         const args = n.arguments;
-        if (args.length === 1 && args[0].type !== 'SpreadElement' && args[0].type !== 'ArgumentPlaceholder') {
-            return baseName(args[0]);
-        }
-        return { name: null, previous: null };
+        if (args.some((x) => x.type === 'SpreadElement' || x.type === 'ArgumentPlaceholder')) return { other: 'call-multi' };
+        const callee = segments(n.callee);
+        return { call: { callee: callee ? callee.join('.') : 'call', args: args.map((x) => shapeOf(x)) } };
     }
-    const segs = segments(n);
-    if (!segs || segs.length === 0) return { name: null, previous: null };
-    const last = segs[segs.length - 1];
-    const prev = segs.length > 1 ? segs[segs.length - 2] : null;
-    const prevPrev = segs.length > 2 ? segs[segs.length - 3] : null;
-    if (segs.length > 1 && COUNT.has(last)) {
-        const p = prev && snakeCase(prev);
-        return { name: p ? `${p}_count` : null, previous: prevPrev && snakeCase(prevPrev) };
-    }
-    if (segs.length > 1 && PASS_THROUGH.has(last)) {
-        return { name: prev && snakeCase(prev), previous: prevPrev && snakeCase(prevPrev) };
-    }
-    return { name: snakeCase(last), previous: prev && snakeCase(prev) };
+    if (n.type === 'BinaryExpression' || n.type === 'LogicalExpression') return { other: 'binary' };
+    if (n.type === 'ConditionalExpression') return { other: 'conditional' };
+    if (n.type === 'TemplateLiteral') return { other: 'template' };
+    return { other: n.type };
+}
+
+/** Whether the core can derive a name from this shape rather than numbering it `value`. */
+function derivable(shape: ExpressionShape): boolean {
+    if ('identifier' in shape || 'member' in shape) return true;
+    if ('call' in shape) return shape.call.args.length === 1 && derivable(shape.call.args[0]);
+    return false;
 }
 
 export interface Named {
-    /** The expression's source text, the key that makes the same expression one placeholder. */
+    /** The expression's source text; the same text is the same placeholder. */
     source: string;
     expression: t.Expression;
     name: string;
-    /** True when no name could be derived and a `value` name was assigned. */
+    /** True when no name could be derived and the core numbered it `value`. */
     unnameable: boolean;
 }
 
 /**
- * Name every distinct expression of one phrase, in first-appearance order. `taken` holds names the
- * developer wrote explicitly in the same phrase.
+ * Name the values of one phrase, in order, index-aligned with `expressions`. `taken` holds names
+ * the developer wrote explicitly in the same phrase.
  */
 export function nameAll(
     expressions: Array<{ source: string; expression: t.Expression }>,
     taken: Iterable<string> = [],
 ): Named[] {
-    const distinct: Array<{ source: string; expression: t.Expression; base: BaseName }> = [];
-    const seen = new Set<string>();
-    for (const x of expressions) {
-        if (seen.has(x.source)) continue;
-        seen.add(x.source);
-        distinct.push({ ...x, base: baseName(x.expression) });
-    }
-
-    const reserved = new Set(taken);
-    const counts = new Map<string, number>();
-    for (const d of distinct) {
-        const n = d.base.name;
-        if (n && !RESERVED.test(n)) counts.set(n, (counts.get(n) ?? 0) + 1);
-    }
-
-    // First pass: a name several expressions share, or one the developer took, is prefixed with
-    // each expression's previous segment where it has one.
-    const first = distinct.map((d) => {
-        const n = d.base.name;
-        if (!n) return null;
-        const clash = RESERVED.test(n) || reserved.has(n) || (counts.get(n) ?? 0) > 1;
-        if (!clash) return n;
-        return d.base.previous ? `${d.base.previous}_${n}` : n;
-    });
-
-    // Second pass: suffix whatever still collides, then name the unnameable.
-    const used = new Set(reserved);
-    const out: Named[] = [];
-    let values = 0;
-    distinct.forEach((d, i) => {
-        let name = first[i];
-        let unnameable = false;
-        if (!name) {
-            unnameable = true;
-            do {
-                values++;
-                name = values === 1 ? 'value' : `value_${values}`;
-            } while (used.has(name));
-        } else if (used.has(name) || RESERVED.test(name)) {
-            const base = name;
-            let k = 2;
-            while (used.has(`${base}_${k}`)) k++;
-            name = `${base}_${k}`;
-        }
-        used.add(name);
-        out.push({ source: d.source, expression: d.expression, name, unnameable });
-    });
-    return out;
+    const explicit = [...taken];
+    const shapes = expressions.map((x) => shapeOf(x.expression));
+    const names = derivePlaceholderNames([
+        ...explicit.map((name) => ({ shape: { other: 'explicit' } as ExpressionShape, explicit: name })),
+        ...shapes.map((shape) => ({ shape })),
+    ]).slice(explicit.length);
+    return expressions.map((x, i) => ({ ...x, name: names[i], unnameable: !derivable(shapes[i]) }));
 }

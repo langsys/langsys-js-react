@@ -63,6 +63,10 @@ FAMILIES = {
     # SRV-6: choosing a locale from the request. The AsyncLocalStorage src/server.ts hands the core
     # for SRV-7 is not locale resolution, so it is not in this pattern.
     'SRV':   (r'Accept-Language|document\.cookie|\bcookies\(|\bheaders\(\)|\bVary\b|searchParams|req\.url|request\.url', r'\buseSyncExternalStore\b'),
+    # VAR-3: reading value markers is the core's; the binding emits none (its transform passes params).
+    'VAR':   (r'[\'"`]/?ls:|data-ls-param|VAR_PARAM_ATTR|createComment|nodeValue', r'\bregisterBlock\b'),
+    # FRM-6: the locale header is the core's localeHeaders(), re-exported; the binding builds none.
+    'FRM':   (r'Accept-Language|accept-language', r'\bLangsysApp\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),
 }
 
