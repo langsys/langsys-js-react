@@ -87,6 +87,25 @@ describe('values the build transform did not rewrite', () => {
         expect((await stored()).filter((s) => s.startsWith('D:'))).toEqual([]);
     }, 60_000);
 
+    // Raw HTML is content, not a variable: a block whose only dynamic part is an HTML insertion
+    // registers that HTML's text through the DOM path; one that also interpolates a value does not.
+    it('a block whose only dynamic part is raw HTML registers its text as content', async () => {
+        const cms = { __html: '<p>Welcome to our store</p><p>Free shipping today</p>' };
+        for (let i = 0; i < 2; i++) await show(el(Translate, { category: 'H' }, el('div', { dangerouslySetInnerHTML: cms })));
+        await until(async () => (await stored()).some((s) => s.startsWith('H:')));
+        await sleep(1000);
+        expect((await stored()).filter((s) => s.startsWith('H:'))).toEqual(['H:BLOCK[Welcome to our store|Free shipping today]']);
+    }, 60_000);
+
+    it('a block mixing raw HTML with an interpolated value registers nothing', async () => {
+        const cms = { __html: '<p>Mixed store banner</p>' };
+        for (const name of ['Ana', 'Bo']) {
+            await show(el(Translate, { category: 'M' }, el('p', null, 'Hi ', name), el('div', { dangerouslySetInnerHTML: cms })));
+        }
+        await sleep(1500);
+        expect((await stored()).filter((s) => s.startsWith('M:'))).toEqual([]);
+    }, 60_000);
+
     it('the core reports it once, as a debug notice naming the transform', async () => {
         const debugWas = logger.debugEnabled;
         logger.debugEnabled = true;

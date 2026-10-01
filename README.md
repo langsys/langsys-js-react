@@ -218,7 +218,7 @@ Without the transform, write the placeholder yourself as **`%key%`** and pass th
 
 `%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, and changing `params` re-renders the block.
 
-Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders.
+Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders. Raw HTML is content, not a variable: a block whose only dynamic part is `dangerouslySetInnerHTML` (a CMS field, say) registers that HTML's text; one that also interpolates a value registers nothing.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
