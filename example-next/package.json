@@ -1,0 +1,20 @@
+{
+    "name": "langsys-js-react-next-example",
+    "private": true,
+    "description": "Local check of langsys-js-react on Next.js's App Router. See ../TESTING.md.",
+    "scripts": {
+        "dev": "next dev --port 3000",
+        "build": "next build",
+        "start": "next start --port 3000"
+    },
+    "dependencies": {
+        "next": "^16.0.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "@types/react": "^19.0.0",
+        "typescript": "^5.8.3"
+    }
+}

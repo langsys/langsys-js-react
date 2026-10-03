@@ -1,0 +1,43 @@
+{
+    "config": {
+        "renderer_egress_ips": ["203.0.113.10"]
+    },
+    "projects": [
+        {
+            "id": "p1",
+            "title": "Local testing",
+            "base_locale": "en",
+            "target_locales": ["es-es"],
+            "website_url": "http://localhost",
+            "machine_translate_new_phrases": true,
+            "phrases": [
+                { "category": "Checks", "phrase": "Feature checks", "translations": { "es-es": "Comprobaciones" } },
+                {
+                    "category": "Checks",
+                    "phrase": "You have {count} items in your cart",
+                    "translations": { "es-es": "Tienes {count} artículos en tu carrito" }
+                },
+                {
+                    "category": "Next",
+                    "phrase": "Rendered on the server",
+                    "translations": { "es-es": "Renderizado en el servidor" }
+                },
+                {
+                    "category": "Next",
+                    "phrase": "Rendered in a client component",
+                    "translations": { "es-es": "Renderizado en un componente de cliente" }
+                }
+            ]
+        }
+    ],
+    "keys": [
+        { "key": "k-writer", "project": "p1", "type": "write" },
+        {
+            "key": "k-public",
+            "project": "p1",
+            "type": "ip_write",
+            "ip_allowlist": [],
+            "report_discovered_content": true
+        }
+    ]
+}

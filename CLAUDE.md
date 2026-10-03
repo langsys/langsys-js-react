@@ -24,7 +24,8 @@ src/
     *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
 contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
 vectors/                      # shared vector files (server messages, var naming), vendored byte-exact from langsys-js-typescript — never edit
-example/                      # Vite playground (npm run dev) — not published
+example/                      # Vite playground (npm run dev; /?checks=1 is the feature-checks page) and the contract-double launcher (npm run fixture) — not published
+example-next/                 # Next.js App Router app installing the packed package and core — not published
 ```
 
 That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, lookup/interpolation logic — lives in `langsys-js-typescript`.
@@ -112,6 +113,7 @@ TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 
 ## Essential commands
 
+- `npm run fixture` — starts the contract double on :8787, seeded from `example/fixture-seed.json`. `TESTING.md` is the local testing guide (playground feature checks and `example-next/`).
 - `npm run dev` — Vite dev server with the demo in `example/`. Needs `.env` at the repo root with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).
 - `npm run typecheck` — `tsc --noEmit`. Should be clean before any commit. (This is the React analog of the Svelte package's `npm run check`; CI runs it.)
 - `npm run build` — `tsup` → builds ESM + CJS + `.d.ts` to `dist/`.

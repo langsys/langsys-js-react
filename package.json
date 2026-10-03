@@ -60,6 +60,7 @@
     "sideEffects": false,
     "scripts": {
         "dev": "vite",
+        "fixture": "node example/fixture.mjs",
         "build": "tsup",
         "build:watch": "tsup --watch",
         "typecheck": "tsc --noEmit",
