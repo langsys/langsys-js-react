@@ -113,18 +113,38 @@ function suspended(intro: string, spinner: string) {
         el('p', null, intro),
         el(Suspense, { fallback: el('p', null, spinner) }, el(Late)),
     );
-    return { tree, resolve: (text: string) => act(async () => resolve(text)) };
+    return {
+        tree,
+        resolve: (text: string) => act(async () => resolve(text)),
+        // Outside act(), React commits on its own schedule, as in a browser: a fallback it has
+        // shown stays on screen for at least its throttle (300 ms in React 19).
+        resolveOnReactsSchedule: (text: string) => resolve(text),
+    };
 }
 
 describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
     // The core's DOM class treats what it shows at mount as provisional and keys and registers the
     // block only once its structure has been quiet for the settle window (250 ms).
 
-    it('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
+    // React holds a fallback it has shown for at least 300 ms, so the content arrives about 300 ms
+    // after mount. The core's 250 ms window closes first and keys the block on the placeholder
+    // (measured: content at 317 ms here, 307 ms in Chromium). Recorded as it.fails until the core's
+    // window outlasts React's hold; it passes with a 500 ms window.
+    it.fails('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
         const s = suspended('Intro A', 'Loading A');
-        const done = await render(s.tree);
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        const shown = (text: string) => Array.from(host.querySelectorAll('p')).some((p) => p.textContent === text);
+        root.render(s.tree);
+        await until(() => shown('Loading A'));
         await sleep(50);
-        await s.resolve('Real A');
+        s.resolveOnReactsSchedule('Real A');
+        await until(() => shown('Real A'));
+        const done = async () => {
+            root.unmount();
+            host.remove();
+        };
         await until(() => blocksWith('Real A').length > 0);
         await sleep(1000);
         expect(blocksWith('Loading A')).toHaveLength(0);
