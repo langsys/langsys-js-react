@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"https://site.local/page"}
 /**
- * A block is registered once, however blocks nest (spec SRV-5's "capture each child once").
+ * SRV-5: a block is registered once, however blocks nest, and never keyed on a placeholder.
  *
  * A `<Translate>` whose children hold a component falls back to the core's DOM class, and that
  * class's walk registers the stamped block hosts nested inside it (MARK-4). A tree-rendered
@@ -10,7 +10,7 @@
  * item the SDK posts — because the double's accepted state stores a duplicate once and cannot
  * show it.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LangsysApp, Translate, createLocaleStore } from './index.js';
@@ -25,6 +25,7 @@ const SEED = {
 type Item = Record<string, unknown>;
 const sent: Item[] = [];
 const realFetch = globalThis.fetch;
+const consoleSpies: MockInstance[] = [];
 
 function Badge() {
     return el('span', null, 'New');
@@ -45,7 +46,7 @@ beforeAll(async () => {
     fx = await startContractFixture();
     await fx.seed(SEED);
     for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error', 'debug'] as const) {
-        vi.spyOn(console, m).mockImplementation(() => {});
+        consoleSpies.push(vi.spyOn(console, m).mockImplementation(() => {}));
     }
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input instanceof Request ? input.url : input);
@@ -60,6 +61,7 @@ beforeAll(async () => {
         UserLocaleStore: createLocaleStore('en'),
         baseLocale: 'en',
         apiUrl: fx.baseUrl,
+        debug: true,
     } as never);
 });
 afterAll(async () => {
@@ -95,25 +97,73 @@ describe('nested blocks register once', () => {
     });
 });
 
+/** The content blocks sent so far that carry `phrase`. */
+const blocksWith = (phrase: string) =>
+    sent.filter((i) => i.type === 'content_block' && (i.phrases as Array<{ phrase: string }>).some((p) => p.phrase === phrase));
+
+/** Every debug line the core has logged that mentions `text`. */
+const noticesWith = (text: string) =>
+    consoleSpies.flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' '))).filter((line) => line.includes(text));
+
+/** A `<Translate>` that falls back to the core's DOM class with a lazy child behind a Suspense placeholder. */
+function suspended(intro: string, spinner: string) {
+    let resolve!: (text: string) => void;
+    const Late = lazy(() => new Promise<{ default: () => ReactNode }>((r) => (resolve = (text) => r({ default: () => el('p', null, text) }))));
+    const tree = el(Translate, { category: 'UI' },
+        el('p', null, intro),
+        el(Suspense, { fallback: el('p', null, spinner) }, el(Late)),
+    );
+    return { tree, resolve: (text: string) => act(async () => resolve(text)) };
+}
+
 describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
-    // Measured: the fallback block's DOM class walks what is on screen when it mounts, so a lazy
-    // child still behind its Suspense fallback keys the block on the placeholder, and the real
-    // content never registers. Recorded as it.fails until the guard exists; passing turns it red.
-    it.fails('no block is keyed on the placeholder, and the real content registers once it arrives', async () => {
-        let resolveLate!: (m: { default: () => ReactNode }) => void;
-        const Late = lazy(() => new Promise<{ default: () => ReactNode }>((r) => (resolveLate = r)));
-        const done = await render(
-            el(Translate, { category: 'UI' },
-                el('p', null, 'Intro one'),
-                el(Suspense, { fallback: el('p', null, 'Loading spinner') }, el(Late)),
-            ),
+    // The core's DOM class treats what it shows at mount as provisional and keys and registers the
+    // block only once its structure has been quiet for the settle window (250 ms).
+
+    it('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
+        const s = suspended('Intro A', 'Loading A');
+        const done = await render(s.tree);
+        await sleep(50);
+        await s.resolve('Real A');
+        await until(() => blocksWith('Real A').length > 0);
+        await sleep(1000);
+        expect(blocksWith('Loading A')).toHaveLength(0);
+        expect(blocksWith('Real A')).toHaveLength(1);
+        expect(noticesWith(String(blocksWith('Real A')[0].custom_id))).toEqual([]);
+        await done();
+    });
+
+    it('never resolved: nothing registers inside the window, then the placeholder registers once, unreported', async () => {
+        const s = suspended('Intro B', 'Loading B');
+        const done = await render(s.tree);
+        await sleep(100);
+        expect(blocksWith('Intro B')).toHaveLength(0);
+        await until(() => blocksWith('Loading B').length > 0);
+        await sleep(1000);
+        expect(blocksWith('Intro B')).toHaveLength(1);
+        expect(blocksWith('Loading B')).toHaveLength(1);
+        expect(noticesWith(String(blocksWith('Loading B')[0].custom_id))).toEqual([]);
+        await done();
+    });
+
+    it('resolved after the window: the placeholder stays registered, the resolved content registers, and the re-key is reported once naming both ids', async () => {
+        const s = suspended('Intro C', 'Loading C');
+        const done = await render(s.tree);
+        await until(() => blocksWith('Loading C').length > 0);
+        await sleep(400);
+        await s.resolve('Real C');
+        await until(() => blocksWith('Real C').length > 0);
+        await sleep(1000);
+        const before = String(blocksWith('Loading C')[0].custom_id);
+        const after = String(blocksWith('Real C')[0].custom_id);
+        expect(before).not.toBe(after);
+        expect(blocksWith('Loading C')).toHaveLength(1);
+        expect(blocksWith('Real C')).toHaveLength(1);
+        const notices = noticesWith('changed its structure after it settled');
+        expect(notices.filter((n) => n.includes(before))).toHaveLength(1);
+        expect(notices.filter((n) => n.includes(before))[0]).toContain(
+            `A <Translate> block registered as ${before} changed its structure after it settled and is now ${after}. If ${before} was a placeholder (a Suspense fallback still showing when the settle window closed), it stays registered.`,
         );
-        await sleep(1500);
-        await act(async () => resolveLate({ default: () => el('p', null, 'Real content') }));
-        await sleep(1500);
-        const phrases = sent.flatMap((i) => ((i.phrases as Array<{ phrase: string }> | undefined) ?? []).map((p) => p.phrase));
-        expect(phrases).not.toContain('Loading spinner');
-        expect(phrases).toContain('Real content');
         await done();
     });
 });
