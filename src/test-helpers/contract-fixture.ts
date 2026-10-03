@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /**
  * Starts the shared contract double (`contract-fixture/server.mjs`, vendored byte-exact from
- * langsys-js-typescript, tree 542f57f5ffcb9038db1b7411152b7e31b96cb269) in its own process.
+ * langsys-js-typescript, tree d7f89b89f911a90a06fc511ac72f8e0e913d4af3) in its own process.
  *
  * There is deliberately no accessor for what the double received: `state()` returns only
  * accepted state, so a test asserts on what the server accepted (CONF-1), never on what the
