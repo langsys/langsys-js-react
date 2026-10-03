@@ -158,7 +158,7 @@ function SettleWindow() {
             {mounted.includes('slow') && <SlowBlock />}
             {mounted.includes('never') && <NeverBlock />}
             <p style={styles.expect}>
-                Expect, under Accepted: <b>never</b> stores a block with “Loading placeholder never” once 250 ms pass;{' '}
+                Expect, under Accepted: <b>never</b> stores a block with “Loading placeholder never” once 500 ms pass;{' '}
                 <b>slow</b> stores the placeholder block and then the settled one, and the console shows one debug
                 notice that the block changed after it settled, naming both ids; <b>fast</b> should store only the
                 settled block (see TESTING.md for how React’s Suspense timing affects it).

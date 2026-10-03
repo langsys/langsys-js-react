@@ -44,7 +44,9 @@ async function show(node: ReactNode): Promise<string> {
     const root = createRoot(host);
     await act(async () => root.render(node));
     const text = host.textContent ?? '';
-    await sleep(400);
+    // Mounted past the core's 500 ms settle window, so a block that falls back to the DOM class
+    // registers before it unmounts.
+    await sleep(700);
     await act(async () => root.unmount());
     host.remove();
     return text;

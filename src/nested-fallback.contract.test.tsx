@@ -127,10 +127,9 @@ describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
     // block only once its structure has been quiet for the settle window (250 ms).
 
     // React holds a fallback it has shown for at least 300 ms, so the content arrives about 300 ms
-    // after mount. The core's 250 ms window closes first and keys the block on the placeholder
-    // (measured: content at 317 ms here, 307 ms in Chromium). Recorded as it.fails until the core's
-    // window outlasts React's hold; it passes with a 500 ms window.
-    it.fails('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
+    // after mount; the core's 500 ms window is still open then. Resolved outside act(), so React
+    // commits on its browser schedule.
+    it('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
         const s = suspended('Intro A', 'Loading A');
         const host = document.createElement('div');
         document.body.appendChild(host);
