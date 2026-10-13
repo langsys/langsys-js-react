@@ -66,10 +66,16 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
         return out;
     };
 
-    /** One entry per expression: the same expression twice is one placeholder and one param. */
-    const distinct = (named: Named[]): Named[] => {
+    /**
+     * One param per placeholder. Every expression is named by the core in order (VAR-2), and its
+     * names decide what repeats: a self-naming expression written twice is one placeholder, so its
+     * later occurrences share the first's name and param; an unnameable one is its own placeholder
+     * every time, even when its source text repeats, since `{a + b}` twice cannot be told from
+     * `{i++}` twice. Source text is never compared.
+     */
+    const placeholders = (named: Named[]): Named[] => {
         const seen = new Set<string>();
-        return named.filter((n) => !seen.has(n.source) && seen.add(n.source));
+        return named.filter((n) => !seen.has(n.name) && seen.add(n.name));
     };
 
     const mergeParams = (existing: t.Expression | null, named: Named[]): t.Expression => {
@@ -131,12 +137,12 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
                 ? existing.value.expression
                 : null;
 
-        const named = distinct(nameAll(found, explicitNames(texts, existingExpr)));
-        const bySource = new Map(named.map((n) => [n.source, n]));
-        for (const f of found) f.replace(`%${bySource.get(f.source)!.name}%`);
-        named.forEach((n) => warn(state, n));
+        const named = nameAll(found, explicitNames(texts, existingExpr));
+        found.forEach((f, i) => f.replace(`%${named[i].name}%`));
+        const unique = placeholders(named);
+        unique.forEach((n) => warn(state, n));
 
-        const value = T.jsxExpressionContainer(mergeParams(existingExpr, named));
+        const value = T.jsxExpressionContainer(mergeParams(existingExpr, unique));
         if (existing) existing.value = value;
         else attrs.push(T.jsxAttribute(T.jsxIdentifier('params'), value));
         state.meta.rewritten++;
@@ -183,15 +189,16 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             .filter((p): p is t.Expression => typeof p !== 'string')
             .map((e) => ({ source: sourceOf(state, e), expression: e }));
         const paramsExpr = (params as t.Expression | undefined) ?? null;
-        const named = distinct(nameAll(values, explicitNames([], paramsExpr)));
-        const bySource = new Map(named.map((n) => [n.source, n.name]));
-        const text = parts.map((p) => (typeof p === 'string' ? p : `{${bySource.get(sourceOf(state, p))}}`)).join('');
-        named.forEach((n) => warn(state, n));
+        const named = nameAll(values, explicitNames([], paramsExpr));
+        let next = 0;
+        const text = parts.map((p) => (typeof p === 'string' ? p : `{${named[next++].name}}`)).join('');
+        const unique = placeholders(named);
+        unique.forEach((n) => warn(state, n));
 
         path.node.arguments = [
             T.stringLiteral(text),
             (category as t.Expression | undefined) ?? T.identifier('undefined'),
-            mergeParams(paramsExpr, named),
+            mergeParams(paramsExpr, unique),
         ];
         state.meta.rewritten++;
     }

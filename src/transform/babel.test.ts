@@ -1,7 +1,9 @@
 /**
  * The placeholder transform's output (spec VAR-6), on source as an app writes it.
  */
-import { transformSync } from '@babel/core';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { parseSync, transformSync, traverse, type NodePath, type types as t } from '@babel/core';
 import { describe, expect, it } from 'vitest';
 import langsysPlaceholders, { type LangsysTransformMetadata } from './babel.js';
 
@@ -80,6 +82,12 @@ describe('<Translate> and <Phrase> children', () => {
         expect(meta.warnings).toEqual([{ line: 2, column: 42, source: 'a + b', name: 'value' }]);
     });
 
+    it('an unnameable expression written twice is two placeholders and two params; a self-naming one is one', () => {
+        const { code, meta } = run(IMPORT + 'const A = ({ a, b, user }) => <Translate>{user.name}: {a + b} and {a + b}, {user.name}</Translate>;');
+        expect(code).toContain('params={{ name: user.name, value: a + b, value_2: a + b }}>%name%: %value% and %value_2%, %name%');
+        expect(meta.warnings.map((w) => w.name)).toEqual(['value', 'value_2']);
+    });
+
     it('two unnameable values are two placeholders and two params, even of the same kind', () => {
         const { code } = run(IMPORT + 'const A = ({ a, b, c, d }) => <Translate>Sum {a + b}, product {c * d}</Translate>;');
         expect(code).toContain('params={{ value: a + b, value_2: c * d }}>Sum %value%, product %value_2%');
@@ -102,6 +110,11 @@ describe('t() calls', () => {
         expect(code).toContain('t("{value} of {value_2}", "UI", { value: fmt(a + b), value_2: fmt(c * d) })');
     });
 
+    it('an unnameable expression repeated in a template is two placeholders too', () => {
+        const { code } = run(IMPORT + 'function A({ a, b }) { const t = useT(); return t(`${a + b} and ${a + b}`, "UI"); }');
+        expect(code).toContain('t("{value} and {value_2}", "UI", { value: a + b, value_2: a + b })');
+    });
+
     it('existing params are merged', () => {
         const { code } = run(IMPORT + 'function A({ n, d }) { const t = useT(); return t(`${n} due`, "UI", { when: d }); }');
         expect(code).toContain('t("{n} due", "UI", { when: d, n: n })');
@@ -116,5 +129,62 @@ describe('t() calls', () => {
     it('a function not from useT() is untouched', () => {
         const { code } = run(IMPORT + 'function A({ n }) { const t = (s) => s; return t(`x ${n}`); }');
         expect(code).toContain('t(`x ${n}`)');
+    });
+});
+
+describe('every shared naming vector, through the transform', () => {
+    // Explicit names reach the transform as `%name%` or `params` keys, covered above; the rest are
+    // written as an app writes them, each expression in turn, and the placeholders come out as the
+    // vector names them, with one param per distinct name.
+    type Case = { id: string; expressions: Array<{ source: string; explicit?: string }>; names: string[] };
+    const vectors = JSON.parse(readFileSync(resolve(__dirname, '../../vectors/var-naming-vectors.json'), 'utf8')) as { cases: Case[] };
+    const cases = vectors.cases.filter((c) => c.expressions.every((e) => !e.explicit));
+    // In JSX children a conditional or a logical expression is left alone by design, since it
+    // usually chooses between elements; in a t() template it is a value like any other.
+    const kept = (source: string) => {
+        const expr = (parseSync(`(${source});`, { filename: 'x.ts', babelrc: false, configFile: false })!.program.body[0] as t.ExpressionStatement).expression;
+        return expr.type !== 'ConditionalExpression' && expr.type !== 'LogicalExpression';
+    };
+    const jsxCases = cases.filter((c) => c.expressions.every((e) => kept(e.source)));
+
+    /** The keys of the object literal passed as params, in order. */
+    function paramKeys(code: string, find: (path: NodePath) => t.ObjectExpression | null): string[] {
+        const ast = parseSync(code, { filename: 'out.tsx', babelrc: false, configFile: false, parserOpts: { plugins: ['jsx', 'typescript'] } })!;
+        let keys: string[] = [];
+        traverse(ast, {
+            enter(path) {
+                const obj = find(path);
+                if (obj) keys = obj.properties.map((p) => ((p as t.ObjectProperty).key as t.Identifier).name);
+            },
+        });
+        return keys;
+    }
+    const unique = (names: string[]) => [...new Set(names)];
+
+    it('covers the cases', () => {
+        expect(cases.length).toBeGreaterThan(25);
+        expect(cases.length - jsxCases.length).toBe(2);
+    });
+
+    it.each(jsxCases.map((c) => [c.id, c] as const))('%s, in <Translate> children', (_id, c) => {
+        const { code } = run(IMPORT + `const A = (p) => <Translate>${c.expressions.map((e) => `{${e.source}}`).join(' | ')}</Translate>;`);
+        expect(code).toContain(`>${c.names.map((n) => `%${n}%`).join(' | ')}</Translate>`);
+        const keys = paramKeys(code, (path) =>
+            path.isJSXAttribute() && path.node.name.name === 'params' && path.node.value?.type === 'JSXExpressionContainer'
+                ? (path.node.value.expression as t.ObjectExpression)
+                : null,
+        );
+        expect(keys).toEqual(unique(c.names));
+    });
+
+    it.each(cases.map((c) => [c.id, c] as const))('%s, in a t() template', (_id, c) => {
+        const { code } = run(IMPORT + `function A(p) { const t = useT(); return t(\`${c.expressions.map((e) => `\${${e.source}}`).join(' | ')}\`, "UI"); }`);
+        expect(code).toContain(`t(${JSON.stringify(c.names.map((n) => `{${n}}`).join(' | '))}, "UI"`);
+        const keys = paramKeys(code, (path) =>
+            path.isCallExpression() && path.node.callee.type === 'Identifier' && path.node.callee.name === 't'
+                ? (path.node.arguments[2] as t.ObjectExpression)
+                : null,
+        );
+        expect(keys).toEqual(unique(c.names));
     });
 });

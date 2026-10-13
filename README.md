@@ -300,7 +300,7 @@ export default withLangsys({ /* your config */ });
 
 It only touches files that import `langsys-js-react`, and only `<Translate>` and `<Phrase>` imported from it and `t` obtained from `useT()`. String and number literals stay text; JSX, conditionals and components inside a block are left as they are.
 
-**Names** are the same in every Langsys SDK, derived from the expression in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`). An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, … and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
+**Names** are the same in every Langsys SDK, derived from the expression in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`), and the same named expression written twice is one placeholder. An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, …, one placeholder each time it appears, even when the same expression repeats, and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
 
 ## Hooks & reactive primitives
 
