@@ -83,6 +83,18 @@ export function LangsysGate({ children }: { children: ReactNode }) {
 
 Locale identifiers are canonicalized by the base SDK: `'en-US'`, `'EN-US'` and `'en-us'` all normalize to **lowercase** `'en-us'`. `useCurrentLocale()` and `detectPreferredLocale()` return that lowercase form, so compare against `'en-us'` — a test for `'en-US'` never matches. Normalize your own values with the re-exported `canonicalizeLocale()` rather than casing by hand.
 
+### Running without credentials
+
+`init()` without a project id, an API key or a locale store does not throw: it resolves `{ status: false, errors }` and leaves the client unconfigured, so a preview build or a test run without secrets still renders. `t()` shows the source text with its params filled, `<Translate>` and `<Phrase>` show their content as written, and nothing is requested or registered: a registration resolves skipped with the `RegistrationReason` `'not-configured'`. An explicit write, such as `LangsysAppAPI.createTranslatableItems`, throws `LangsysConfigurationError`. `LangsysApp.isConfigured()` reports the state.
+
+To fail loudly instead, pass `requireCredentials: true`. While the client is unconfigured:
+
+- `t()` throws `LangsysConfigurationError`, so a component that calls it throws during render, and the error reaches your nearest error boundary.
+- `<Translate>` and `<Phrase>` still show their content as written. Their registration rejects with the same error, left unhandled so it appears as an unhandled rejection in the console, and fails a test runner that treats those as errors. A block of markup and text holding a value the build transform did not name registers nothing, so it stays silent.
+- Inside a server request scope, the request's `t()` throws and a block's registration does not reject.
+
+`LangsysConfigurationError` is exported from `langsys-js-react` and from `langsys-js-react/server`.
+
 ### SSR token strategy
 
 `ssrTokenStrategy` (default `'client'`) decides what a request scope's `close()` does with the phrases and blocks its [server render](#server-side-rendering-nextjs-remix) missed. The scope reads it from `LangsysApp.init()` in the rendering process, so it applies only where the server calls `init()` too. A client-only app like the one above has no server render, and a server that never calls `init()` sends nothing from the server.

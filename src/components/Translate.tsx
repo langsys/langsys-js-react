@@ -99,7 +99,10 @@ export function Translate({
         if (!mapped.ok || !rendered || rendered.shape === 'empty' || underDomWalk) return;
         if (unnamedValues) return warnUnnamed();
         // `host` lets the core check the block's ancestors for a resolved marker (GATE-10).
-        registerBlock(mapped.nodes, { ...options, host });
+        // The promise is left unhandled on purpose: it rejects only under `requireCredentials`
+        // with no credentials (WIRE-4), React has no lifecycle that takes a promise, and an
+        // unhandled rejection is how the core surfaces that. Inside a request scope it never rejects.
+        void registerBlock(mapped.nodes, { ...options, host });
     };
     if (scope) {
         // A server render: the scope holds the registration for close().

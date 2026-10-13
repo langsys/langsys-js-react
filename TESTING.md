@@ -24,7 +24,7 @@ npm ci && npm run build
 cd ../langsys-js-react
 npm ci
 ln -sfn ../../langsys-js-typescript node_modules/langsys-js-typescript   # point the dependency at the local build
-npm test                                                               # 30 files pass; 2 tests are expected failures
+npm test                                                               # 31 files pass; 2 tests are expected failures
 ```
 
 The symlink lives in `node_modules` only, so nothing tracked changes. `npm ci` or `npm install`

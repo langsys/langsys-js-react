@@ -36,6 +36,10 @@ export {
 // request scope fetches its catalog with the project and key that call supplies.
 export { LangsysApp, createLocaleStore, type iLangsysInitConfig } from './app.js';
 
+// What a request's `t()` throws under `requireCredentials` with no credentials (spec WIRE-4), by
+// reference, for a server that must catch it without loading the main entry.
+export { LangsysConfigurationError } from 'langsys-js-typescript';
+
 let storageInstalled = false;
 
 /**

@@ -103,6 +103,11 @@ export { LegacyFormatError } from 'langsys-js-typescript';
 // `reason` names why (spec SNAP-2, SNAP-3).
 export { SnapshotError } from 'langsys-js-typescript';
 
+// The client has no credentials (spec WIRE-4): an explicit write throws it, and so do `t()` and a
+// block's registration under `requireCredentials`. Re-exported by reference, so `instanceof`
+// matches what the core throws.
+export { LangsysConfigurationError } from 'langsys-js-typescript';
+
 // The request header naming the current locale, for an app's calls to its own API (spec FRM-6).
 // Re-exported by reference: `fetch(url, { headers: { ...localeHeaders() } })`.
 export { localeHeaders } from 'langsys-js-typescript';

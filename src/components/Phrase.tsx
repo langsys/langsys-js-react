@@ -93,7 +93,9 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
         if (unnamedValues) return warnUnnamed();
         // `host` lets the core check the phrase's ancestors for a resolved marker (GATE-10),
         // walking from its parent: the phrase element's own marker says it rendered a translation.
-        registerBlock(unit, { ...options, host });
+        // The promise is left unhandled on purpose, as in <Translate>: it rejects only under
+        // `requireCredentials` with no credentials (WIRE-4), and that is how the core surfaces it.
+        void registerBlock(unit, { ...options, host });
     };
     if (scope) {
         register();

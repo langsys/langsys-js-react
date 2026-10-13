@@ -86,6 +86,8 @@ LangsysApp.loadSnapshot(snapshot, locale?)  // core's synchronous loader, by ref
 legacyKeys                   // init option, inherited: legacy-key mode (MIG); LangsysApp.Translations.setLegacyKeys(files|null); LegacyFormatError + LegacyKeyFile re-exported
 setWriteGrant(grant)         // Promise<void> — re-authorizes with an X-Write-Grant header; also LangsysApp.setWriteGrant
 writeGrant                   // init option, inherited from the base config type: string | (() => string | null | undefined | Promise<…>)
+requireCredentials           // init option, inherited (WIRE-4): unconfigured client → t() throws, a block's registerBlock promise rejects (left unhandled on purpose); off → source text, 'not-configured'
+LangsysApp.isConfigured()    // core's, by reference; LangsysConfigurationError re-exported by reference from both entries
 
 // Server entry — langsys-js-react/server (node-only; imports node:async_hooks)
 renderInRequestScope({locale, catalog?, url?}, render) -> { result, seed, close }  // one request, one core scope
