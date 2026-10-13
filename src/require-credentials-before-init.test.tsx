@@ -37,6 +37,11 @@ function App() {
         createElement(Phrase, { category: 'UI' }, 'Hello ', createElement('b', null, 'world')),
         // Holds a component, so it falls back to the core's DOM class after mount.
         createElement(Translate, { category: 'UI' }, createElement('p', null, createElement(Name))),
+        // Values the transform did not name: `register: false` blocks, which only read and
+        // never reject (a tree-path <Translate>, a fallback <Translate>, a <Phrase>).
+        createElement(Translate, { category: 'UI' }, createElement('p', null, 'Welcome ', 'Bo'), createElement('p', null, 'Two')),
+        createElement(Translate, { category: 'UI' }, createElement('p', null, 'Welcome ', 'Cy'), createElement(Name)),
+        createElement(Phrase, { category: 'UI' }, 'Hey ', 'Di', createElement('b', null, '!')),
         createElement(Probe),
     );
 }
@@ -80,12 +85,13 @@ describe('requireCredentials with blocks mounted before init()', () => {
     });
 
     it('each block rejects with LangsysConfigurationError once init() refuses', () => {
-        // Two from the tree path's registerBlock, one from the DOM class's render.
+        // Two from the tree path's registerBlock, one from the DOM class's render; none from the
+        // three `register: false` blocks.
         expect(rejections).toHaveLength(3);
         for (const reason of rejections) expect(reason).toBeInstanceOf(LangsysConfigurationError);
     });
 
     it('the page still shows the text as written', () => {
-        expect(el.textContent).toBe('HelloWorldHello worldAna');
+        expect(el.textContent).toBe('HelloWorldHello worldAnaWelcome BoTwoWelcome CyAnaHey Di!');
     });
 });

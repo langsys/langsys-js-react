@@ -1,4 +1,4 @@
-import { createElement, useContext, useEffect, useRef } from 'react';
+import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
     CONTENT_BLOCK_MARKER_ATTR,
@@ -13,7 +13,6 @@ import {
 } from 'langsys-js-typescript';
 import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
-import { UnderDomWalk } from './dom-walk.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
 
 /**
@@ -93,12 +92,15 @@ export function Translate({
     const inSeedScope = useSeedScopeRunner();
     const rendered = mapped.ok ? inSeedScope(() => renderBlock(mapped.nodes, options)) : null;
     const scope = currentRequestScope();
-    const underDomWalk = useContext(UnderDomWalk);
 
     const register = (host?: Element) => {
-        if (!mapped.ok || !rendered || rendered.shape === 'empty' || underDomWalk) return;
-        if (unnamedValues) return warnUnnamed();
-        // `host` lets the core check the block's ancestors for a resolved marker (GATE-10).
+        if (!mapped.ok || !rendered || rendered.shape === 'empty') return;
+        // With a value the transform did not name, `options` carries `register: false`: the call
+        // registers nothing and still claims the host.
+        if (unnamedValues) warnUnnamed();
+        // `host` claims the element for this component, so an enclosing <Translate> that fell back
+        // to the core's DOM class leaves it alone instead of taking it over with its own params
+        // (MARK-2), and lets the core check the block's ancestors for a resolved marker (GATE-10).
         // The promise is left unhandled on purpose: it rejects only under `requireCredentials`
         // with no credentials (WIRE-4), React has no lifecycle that takes a promise, and an
         // unhandled rejection is how the core surfaces that. Inside a request scope it never rejects.
@@ -155,7 +157,7 @@ export function Translate({
     return createElement(
         tag,
         { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
-        createElement(UnderDomWalk.Provider, { value: true }, children),
+        children,
     );
 }
 

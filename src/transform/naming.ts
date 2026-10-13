@@ -7,7 +7,8 @@
  *
  * - an identifier → `{ identifier }`
  * - a member chain (optional or not, type wrappers ignored) → `{ member: [segments] }`
- * - a call → `{ call: { callee, args: [shapes] } }` (the core names one with a single argument)
+ * - a call → `{ call: { callee, args: [shapes] } }`, `callee` its dotted name or `''` when it cannot
+ *   be spelled (the core names a call with a single argument)
  * - a computed member, a binary, logical or conditional expression, a template literal, a call
  *   with a spread argument, anything else → `{ other }`
  *
@@ -57,7 +58,9 @@ export function shapeOf(e: t.Node): ExpressionShape {
         const args = n.arguments;
         if (args.some((x) => x.type === 'SpreadElement' || x.type === 'ArgumentPlaceholder')) return { other: 'call-multi' };
         const callee = segments(n.callee);
-        return { call: { callee: callee ? callee.join('.') : 'call', args: args.map((x) => shapeOf(x)) } };
+        // A callee that cannot be spelled (`getA()(n)`, `fmt[a](x)`) is '': the core then knows the
+        // call does not identify its expression, so two of them are two placeholders.
+        return { call: { callee: callee ? callee.join('.') : '', args: args.map((x) => shapeOf(x)) } };
     }
     if (n.type === 'BinaryExpression' || n.type === 'LogicalExpression') return { other: 'binary' };
     if (n.type === 'ConditionalExpression') return { other: 'conditional' };

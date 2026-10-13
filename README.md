@@ -90,7 +90,7 @@ Locale identifiers are canonicalized by the base SDK: `'en-US'`, `'EN-US'` and `
 To fail loudly instead, pass `requireCredentials: true`. While the client is unconfigured:
 
 - `t()` throws `LangsysConfigurationError`, so a component that calls it throws during render, and the error reaches your nearest error boundary.
-- `<Translate>` and `<Phrase>` still show their content as written. Their registration rejects with the same error, including a block that mounted before `init()` answered, left unhandled so it appears as an unhandled rejection in the console, and fails a test runner that treats those as errors. A block of markup and text holding a value the build transform did not name registers nothing, so it stays silent.
+- `<Translate>` and `<Phrase>` still show their content as written. Their registration rejects with the same error, including a block that mounted before `init()` answered, left unhandled so it appears as an unhandled rejection in the console, and fails a test runner that treats those as errors. A block holding a value the build transform did not name registers nothing, so it only reads and stays silent.
 - On a server, the request's `t()` throws and a block's registration never rejects.
 
 `LangsysConfigurationError` is exported from `langsys-js-react` and from `langsys-js-react/server`.

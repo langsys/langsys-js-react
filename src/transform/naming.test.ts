@@ -14,7 +14,7 @@ import { derivePlaceholderNames, type ExpressionShape } from 'langsys-js-typescr
 import { nameAll, shapeOf } from './naming.js';
 
 const VECTORS = readFileSync(resolve(__dirname, '../../vectors/var-naming-vectors.json'));
-const VECTORS_BLOB = 'da9cf3d5a78dc8323882317dc88f25cece2291bb';
+const VECTORS_BLOB = '0513e1cb215edd9df2e5b34a04cc3e5d2cfcc034';
 type Case = { id: string; expressions: Array<{ source: string; shape: ExpressionShape; explicit?: string }>; names: string[] };
 const cases = (JSON.parse(VECTORS.toString('utf8')) as { cases: Case[] }).cases;
 
@@ -22,7 +22,7 @@ describe('the shared naming vectors', () => {
     it('are the core-authored file, byte for byte', () => {
         const blob = createHash('sha1').update(`blob ${VECTORS.length}\0`).update(VECTORS).digest('hex');
         expect(blob).toBe(VECTORS_BLOB);
-        expect(cases).toHaveLength(31);
+        expect(cases).toHaveLength(32);
     });
 
     it.each(cases.map((c) => [c.id, c] as const))('%s: each source maps to its shape, and names as expected', (_id, c) => {

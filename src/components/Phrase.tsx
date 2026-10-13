@@ -1,4 +1,4 @@
-import { createElement, useContext, useEffect, useRef } from 'react';
+import { createElement, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
     PHRASE_MARKER_ATTR,
@@ -13,7 +13,6 @@ import {
 } from 'langsys-js-typescript';
 import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
 import { useT } from '../hooks.js';
-import { UnderDomWalk } from './dom-walk.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
 
 /**
@@ -72,7 +71,6 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
     const hostRef = useRef<HTMLElement | null>(null);
     const instanceRef = useRef<VanillaPhrase>(undefined);
-    const underDomWalk = useContext(UnderDomWalk);
     const mapped = toBlockNodes(children);
     // The phrase host itself is the unit: the core renders it as one rich phrase, whose inline
     // elements a translation may reorder (MARK-4). Its elements' `source` indices count from 1.
@@ -89,10 +87,14 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     const scope = currentRequestScope();
 
     const register = (host?: Element) => {
-        if (!unit || underDomWalk) return;
-        if (unnamedValues) return warnUnnamed();
-        // `host` lets the core check the phrase's ancestors for a resolved marker (GATE-10),
-        // walking from its parent: the phrase element's own marker says it rendered a translation.
+        if (!unit) return;
+        // With a value the transform did not name, `options` carries `register: false`: the call
+        // registers nothing and still claims the host.
+        if (unnamedValues) warnUnnamed();
+        // `host` claims the element for this component, so an enclosing <Translate> that fell back
+        // to the core's DOM class leaves it alone (MARK-2), and lets the core check the phrase's
+        // ancestors for a resolved marker (GATE-10), walking from its parent: the phrase element's
+        // own marker says it rendered a translation.
         // The promise is left unhandled on purpose, as in <Translate>: it rejects only under
         // `requireCredentials` with no credentials (WIRE-4), and that is how the core surfaces it.
         void registerBlock(unit, { ...options, host });

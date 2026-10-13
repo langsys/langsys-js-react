@@ -4,16 +4,16 @@
  * SRV-5: a block is registered once, however blocks nest, and never keyed on a placeholder.
  *
  * A `<Translate>` whose children hold a component falls back to the core's DOM class, and that
- * class's walk registers the stamped block hosts nested inside it (MARK-4). A tree-rendered
- * `<Translate>` under such an ancestor therefore leaves its registration to the ancestor's walk;
- * registering it itself would send the same block twice. Measured at the transport seam — every
- * item the SDK posts — because the double's accepted state stores a duplicate once and cannot
- * show it.
+ * class's walk takes over a marked host nested inside it that nothing claims (MARK-2). A
+ * tree-rendered `<Translate>` or `<Phrase>` under such an ancestor registers itself through
+ * `registerBlock` with its host, which claims the host, so the walk leaves it alone: the block is
+ * sent once, under its own params. Measured at the transport seam — every item the SDK posts —
+ * because the double's accepted state stores a duplicate once and cannot show it.
  */
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LangsysApp, Translate, createLocaleStore } from './index.js';
+import { LangsysApp, Phrase, Translate, createLocaleStore, currentlyLoadedLocale } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
 
 let fx: ContractFixture;
@@ -71,6 +71,7 @@ afterAll(async () => {
 
 describe('nested blocks register once', () => {
     it('depth 3, with a component in the outer block: each block is sent exactly once', async () => {
+        await settled();
         const done = await render(
             el(Translate, { category: 'UI' },
                 el('p', null, 'Outer text'),
@@ -95,7 +96,54 @@ describe('nested blocks register once', () => {
         }).toEqual({ outer: 1, middle: 1, inner: 1 });
         await done();
     });
+
+    it('a <Translate> and a <Phrase> nested in a fallback block keep their own params', async () => {
+        await settled();
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        await act(async () =>
+            root.render(
+                el(Translate, { category: 'UI' },
+                    el('p', null, 'Gallery'),
+                    el(Badge),
+                    el(Translate, { category: 'UI', params: { name: 'Ana' } },
+                        el('img', { alt: 'Photo of %name%' }),
+                        el('p', null, 'Taken by %name%'),
+                        el('p', null, 'In Lisbon'),
+                    ),
+                    el(Phrase, { category: 'UI', params: { name: 'Ana' } }, 'Shared by ', el('b', null, '%name%')),
+                ),
+            ),
+        );
+        await until(() => blocksWith('Taken by {name}').length > 0 && blocksWith('Gallery').length > 0);
+        await sleep(1500);
+        // Each nested unit is sent once, as its own placeholders, never with the value in it.
+        expect(blocksWith('Taken by {name}').map((b) => (b.phrases as Array<{ phrase: string }>).map((p) => p.phrase))).toEqual([
+            ['Photo of {name}', 'Taken by {name}', 'In Lisbon'],
+        ]);
+        expect(sent.filter((i) => i.type === 'phrase' && String(i.phrase).startsWith('Shared by')).map((i) => i.phrase)).toEqual([
+            'Shared by {m0o}{name}{m0c}',
+        ]);
+        const phrasesSent = sent.flatMap((i) => (i.type === 'phrase' ? [String(i.phrase)] : (i.phrases as Array<{ phrase: string }>).map((p) => p.phrase)));
+        expect(phrasesSent.filter((p) => p.includes('Ana'))).toEqual([]);
+        // And they still show their own values after the enclosing walk.
+        expect(host.querySelector('img')?.getAttribute('alt')).toBe('Photo of Ana');
+        expect(host.textContent).toContain('Taken by Ana');
+        expect(host.textContent).toContain('Shared by Ana');
+        await act(async () => root.unmount());
+        host.remove();
+       }, 15_000);
 });
+
+/**
+ * Resolves once the first catalog has been published and its locale written (about 100 ms later),
+ * the two `t` changes of a page load, so a block mounted after it registers from one `t`.
+ */
+async function settled() {
+    await LangsysApp.translationsLoadingPromise;
+    await until(() => currentlyLoadedLocale.get() === 'en');
+}
 
 /** The content blocks sent so far that carry `phrase`. */
 const blocksWith = (phrase: string) =>
