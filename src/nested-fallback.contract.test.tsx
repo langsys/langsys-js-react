@@ -13,7 +13,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LangsysApp, Phrase, Translate, createLocaleStore, currentlyLoadedLocale } from './index.js';
+import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
 
 let fx: ContractFixture;
@@ -70,8 +70,9 @@ afterAll(async () => {
 });
 
 describe('nested blocks register once', () => {
+    // Mounted straight after init(), so each tree-rendered block registers on every `t` change of
+    // the page load (the catalog, then its locale), and the core sends one request per block.
     it('depth 3, with a component in the outer block: each block is sent exactly once', async () => {
-        await settled();
         const done = await render(
             el(Translate, { category: 'UI' },
                 el('p', null, 'Outer text'),
@@ -98,7 +99,6 @@ describe('nested blocks register once', () => {
     });
 
     it('a <Translate> and a <Phrase> nested in a fallback block keep their own params', async () => {
-        await settled();
         const host = document.createElement('div');
         document.body.appendChild(host);
         const root = createRoot(host);
@@ -125,8 +125,9 @@ describe('nested blocks register once', () => {
         expect(sent.filter((i) => i.type === 'phrase' && String(i.phrase).startsWith('Shared by')).map((i) => i.phrase)).toEqual([
             'Shared by {m0o}{name}{m0c}',
         ]);
-        const phrasesSent = sent.flatMap((i) => (i.type === 'phrase' ? [String(i.phrase)] : (i.phrases as Array<{ phrase: string }>).map((p) => p.phrase)));
-        expect(phrasesSent.filter((p) => p.includes('Ana'))).toEqual([]);
+        // Nor does anything sent carry the value: not a phrase, and not the enclosing block's content,
+        // which keeps a nested host's element and drops its children.
+        expect(sent.filter((i) => JSON.stringify(i).includes('Ana'))).toEqual([]);
         // And they still show their own values after the enclosing walk.
         expect(host.querySelector('img')?.getAttribute('alt')).toBe('Photo of Ana');
         expect(host.textContent).toContain('Taken by Ana');
@@ -135,15 +136,6 @@ describe('nested blocks register once', () => {
         host.remove();
        }, 15_000);
 });
-
-/**
- * Resolves once the first catalog has been published and its locale written (about 100 ms later),
- * the two `t` changes of a page load, so a block mounted after it registers from one `t`.
- */
-async function settled() {
-    await LangsysApp.translationsLoadingPromise;
-    await until(() => currentlyLoadedLocale.get() === 'en');
-}
 
 /** The content blocks sent so far that carry `phrase`. */
 const blocksWith = (phrase: string) =>
