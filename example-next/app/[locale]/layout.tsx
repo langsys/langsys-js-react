@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { after } from 'next/server';
-import { LangsysApp, createSignal } from 'langsys-js-typescript';
-import { createRequestScope } from 'langsys-js-react/server';
+import { LangsysApp, createLocaleStore, createRequestScope } from 'langsys-js-react/server';
 import { LangsysProvider } from '../langsys-client';
 
 const fixture = process.env.LANGSYS_FIXTURE_URL ?? 'http://127.0.0.1:8787';
@@ -13,7 +12,7 @@ function initServer() {
     ready ??= LangsysApp.init({
         projectid: 'p1',
         key: 'k-writer',
-        UserLocaleStore: createSignal('en'),
+        UserLocaleStore: createLocaleStore('en'),
         baseLocale: 'en',
         apiUrl: `${fixture}/api`,
         ssrTokenStrategy: 'server',

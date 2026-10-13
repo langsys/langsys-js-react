@@ -3,7 +3,8 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { privateNamesFrom, CORE_CLASS } from '../_dev_/enumerate-surface.mjs';
 import { LangsysApp as core } from 'langsys-js-typescript';
-import { LangsysApp } from './index.js';
+import { LangsysApp, createLocaleStore } from './index.js';
+import * as serverEntry from './server.js';
 
 /**
  * Pins the binding's entry point against the core's PUBLIC surface, generated
@@ -74,6 +75,11 @@ describe('LangsysApp surface', () => {
         // The strongest form of the guarantee: not "forwards correctly" but
         // "is the same object", which cannot drift.
         expect(LangsysApp).toBe(core);
+    });
+
+    it('the server entry exports the same LangsysApp and createLocaleStore', () => {
+        expect(serverEntry.LangsysApp).toBe(LangsysApp);
+        expect(serverEntry.createLocaleStore).toBe(createLocaleStore);
     });
 
     it('members are identical references, not re-wrapped', () => {

@@ -15,7 +15,6 @@
  */
 
 import {
-    LangsysApp as _LangsysApp,
     type CatalogSnapshot,
     type ExtractParamKeys,
     type LegacyKeyFile,
@@ -38,7 +37,6 @@ import {
     type iCountryList,
     type iCurrency,
     type iCurrencyList,
-    type iLangsysInitConfig as iVanillaInitConfig,
     type iLangsysResponse,
     type iLanguageName,
     type iLocaleData,
@@ -175,38 +173,6 @@ export type {
     iTranslations,
 };
 
-/**
- * React-flavored init config. Identical to the base SDK's config except
- * `UserLocaleStore` is typed as a `Signal<string>` — create one with
- * `createLocaleStore()` (or get one from the `useLocaleStore` hook). The base
- * SDK only reads and subscribes to it.
- */
-export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocaleStore'> {
-    UserLocaleStore: Signal<string>;
-}
-
-/**
- * React SDK entry point — the core singleton itself, re-exported **by
- * reference**, with `init` typed to take the React-flavoured config.
- *
- * There is no wrapper and no list of delegated methods, so every public member
- * of the core is reachable here the moment it exists, and identity is
- * preserved: `LangsysApp` here **is** the core's `LangsysApp`. This binding
- * overrides no behaviour, so the only thing it needs to express is a type.
- *
- * Destructuring behaves exactly as on the core. `const { t } = LangsysApp` is
- * safe — `t` is a getter returning a closure. Prototype methods are not:
- * `const { refresh } = LangsysApp` detaches the receiver and the call throws.
- * Call methods on `LangsysApp` itself.
- *
- * The type narrows `init` to require a `Signal<string>` for `UserLocaleStore`.
- * The core accepts the broader `LocaleSource`, which `Signal<string>`
- * satisfies. Because the type is `Omit<typeof _LangsysApp, 'init'> & {…}` —
- * keyof-mapped — it does not expose the core's private members: calling one is
- * a compile error.
- *
- * Pinned by `src/surface.test.ts`.
- */
-export const LangsysApp: Omit<typeof _LangsysApp, 'init'> & {
-    init(config: iLangsysInitConfig): Promise<iLangsysResponse>;
-} = _LangsysApp;
+// The entry point and its config type live in app.ts, which imports no React, so the server
+// entry exports the same `LangsysApp`.
+export { LangsysApp, type iLangsysInitConfig } from './app.js';

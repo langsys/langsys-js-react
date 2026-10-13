@@ -13,8 +13,7 @@ This package's server entry, `langsys-js-react/server`, opens a scope around one
 ```tsx
 // server.tsx
 import { renderToString } from 'react-dom/server';
-import { LangsysApp, createLocaleStore } from 'langsys-js-react';
-import { renderInRequestScope } from 'langsys-js-react/server';
+import { LangsysApp, createLocaleStore, renderInRequestScope } from 'langsys-js-react/server';
 
 // Once per process: request scopes fetch catalogs, and close() sends misses, with this project and key.
 const ready = LangsysApp.init({
@@ -107,10 +106,21 @@ export { LangsysProvider, Translate, Phrase, DontTranslate } from 'langsys-js-re
 
 ```tsx
 // app/layout.tsx — a server component
-import { createRequestScope } from 'langsys-js-react/server';
+import { LangsysApp, createLocaleStore, createRequestScope } from 'langsys-js-react/server';
 import { LangsysProvider } from './langsys-client';
 
+// The server's own SDK, initialized once per process: scopes fetch catalogs with this project and key.
+let ready: Promise<unknown> | undefined;
+const initServer = () =>
+    (ready ??= LangsysApp.init({
+        projectid: process.env.LANGSYS_PROJECT_ID!,
+        key: process.env.LANGSYS_SERVER_KEY!,
+        UserLocaleStore: createLocaleStore('en'),
+        baseLocale: 'en',
+    }));
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+    await initServer();
     const locale = await resolveLocale(); // your app's own resolution: route segment, cookie, header
     const scope = await createRequestScope({ locale });
     return (
@@ -122,6 +132,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     );
 }
 ```
+
+The layout imports `LangsysApp` and `createLocaleStore` from `langsys-js-react/server`, which loads no React, so a server component can call `init()`. It runs when a request first renders the layout, not when the module loads.
 
 Under the provider, `useT()`, `useCurrentLocale()`, `useTranslations()`, `<Translate>` and `<Phrase>` render the request's locale and catalog on the server, and the browser hydrates from the same catalog, so the first client render matches the served HTML. Initialize the SDK in the browser as usual (`LangsysApp.init()` in a Client Component's `useEffect`); the provider has already seeded it with the request's catalog.
 
@@ -193,7 +205,7 @@ Pass `debug: true` to `init()` to log the SDK's lifecycle to the console, includ
 2. **One scope per request.** Open a scope for every request and close it after that request's response. Never share one across requests: sharing one is exactly the cross-visitor leak the scope exists to prevent.
 3. **Data format.** A `catalog` passed to a scope must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
 4. **Keys.** Use a read-only API key in the browser — anything shipped in public JS is extractable. A write key belongs on the server, where `close()` can send a scope's misses with it under the `'server'` or `'auto'` strategy.
-5. **Server-only entry.** Import `langsys-js-react/server` only from server code; it imports `node:async_hooks`. The main entry imports React hooks, so in a React Server Component environment put its hooks and components behind a Client Component boundary of your own (this package ships no `'use client'` directive).
+5. **Server-only entry.** Import `langsys-js-react/server` only from server code; it imports `node:async_hooks`. The main entry imports React hooks, so in a React Server Component environment put its hooks and components behind a Client Component boundary of your own (this package ships no `'use client'` directive). The server entry loads no React and exports the same `LangsysApp` and `createLocaleStore`, so a server component initializes the SDK through it.
 
 ## Troubleshooting
 

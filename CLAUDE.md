@@ -12,10 +12,11 @@ It is the React sibling of [`langsys-js-svelte`](https://github.com/langsys/lang
 
 ```
 src/
-    server.ts                 # langsys-js-react/server (node-only): renderInRequestScope over the core's request scope (SRV-7)
+    server.ts                 # langsys-js-react/server (node-only, no React): renderInRequestScope over the core's request scope (SRV-7); also exports LangsysApp + createLocaleStore
+    app.ts                    # LangsysApp (core singleton by reference, init typed), iLangsysInitConfig, createLocaleStore — imports no React, shared by both entries
     transform/                # build-time only: the VAR-6 placeholder transform (babel.ts, naming.ts per VAR-2, run.ts), Vite plugin (vite.ts)
     next.ts, next-loader.ts   # langsys-js-react/next: withLangsys(nextConfig) adds the transform as a Turbopack rule + webpack pre-loader
-    index.ts                  # public exports — LangsysApp wrapper, hooks, Translate, raw signals, type re-exports
+    index.ts                  # public exports — LangsysApp (from app.ts), hooks, Translate, raw signals, type re-exports
     adapters.ts               # useSignal (Signal → useSyncExternalStore) + createLocaleStore (the writable analog)
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
     block-nodes.ts            # React children <-> the core's BlockNode tree (toBlockNodes / toReactNodes)
@@ -34,7 +35,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 The Svelte wrapper adapts a native store *into* the SDK (`writable` → `Signal`). The React wrapper does the mirror image: it adapts the SDK's signals *out* to React's render cycle, and supplies a `Signal`-shaped locale store on the input side.
 
-1. **`LangsysApp.init({ UserLocaleStore })`** — `LangsysApp` is the base SDK's singleton re-exported **by reference** (not a wrapper class), with `init` typed to take a `Signal<string>`. Because React's locale store is already a `Signal`, `init` is a straight passthrough. See the reasoning at the export site in `src/index.ts`.
+1. **`LangsysApp.init({ UserLocaleStore })`** — `LangsysApp` is the base SDK's singleton re-exported **by reference** (not a wrapper class), with `init` typed to take a `Signal<string>`. Because React's locale store is already a `Signal`, `init` is a straight passthrough. See the reasoning at the export site in `src/app.ts`.
 
 2. **Hooks (`useT`, `useCurrentLocale`, `useTranslations`)** — each wraps a base-SDK signal with `useSignal`, which is `useSyncExternalStore(signal.subscribe, signal.get, signal.get)`. The base SDK's `tSignal` re-emits a fresh `TFunction` closure on every translations/locale change (and a stable reference between changes), which is exactly the identity contract `useSyncExternalStore` needs — no tearing, no render loops. `useT()` returns the current `TFunction`; calling `t('Phrase', 'Cat', params?)` reads the current translation and the component re-renders when the signal changes.
 
@@ -88,6 +89,7 @@ writeGrant                   // init option, inherited from the base config type
 
 // Server entry — langsys-js-react/server (node-only; imports node:async_hooks)
 renderInRequestScope({locale, catalog?, url?}, render) -> { result, seed, close }  // one request, one core scope
+LangsysApp, createLocaleStore  // the main entry's, from app.ts: loads no React, so a Server Component calls init() here; a scope fetches with init()'s project and key
 installRequestScopeStorage()  // AsyncLocalStorage for the core; then createRequestScope + scope.enter() where a render can't be wrapped
 createRequestScope, currentRequestScope, setRequestScopeStorage, clearSharedCatalogs  // core, by reference
 

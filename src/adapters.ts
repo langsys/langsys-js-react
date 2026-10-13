@@ -1,5 +1,5 @@
 import { useContext, useSyncExternalStore } from 'react';
-import { createSignal, type Signal } from 'langsys-js-typescript';
+import type { Signal } from 'langsys-js-typescript';
 import { SeedScope } from './components/LangsysProvider.js';
 
 /**
@@ -31,21 +31,5 @@ export function useSignal<T>(signal: Signal<T>): T {
     return useSyncExternalStore(signal.subscribe, signal.get, scope ? () => scope.run(signal.get) : signal.get);
 }
 
-/**
- * Create a reactive `Signal<string>` to hold the user's selected locale — the
- * React analog of Svelte's `writable('en-US')`.
- *
- * Pass the result as `UserLocaleStore` to `LangsysApp.init`, read it reactively
- * with `useSignal(store)` (or use the all-in-one `useLocaleStore` hook), and
- * switch locale with `store.set('fr-FR')`. The base SDK only ever reads and
- * subscribes to it — it never writes.
- *
- * Locale identifiers are canonicalized to BCP 47 by the base SDK (v0.3.0+), so
- * `'en-us'` still works on input — but `currentlyLoadedLocale` always emits the
- * canonical form (`'en-us'` — lowercase, per WIRE-3), so compare against the
- * lowercase form. Verified against the core, not assumed: `canonicalizeLocale`
- * lowercases both subtags, so a consumer testing `=== 'en-US'` never matches.
- */
-export function createLocaleStore(initial = 'en-US'): Signal<string> {
-    return createSignal<string>(initial);
-}
+// Lives in app.ts, which imports no React, so the server entry exports the same function.
+export { createLocaleStore } from './app.js';

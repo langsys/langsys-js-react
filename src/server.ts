@@ -31,6 +31,11 @@ export {
     type ScopeStorage,
 } from 'langsys-js-typescript';
 
+// The same `LangsysApp` and `createLocaleStore` the main entry exports. app.ts imports no React,
+// so a server process, a Next Server Component included, calls `LangsysApp.init()` from here: a
+// request scope fetches its catalog with the project and key that call supplies.
+export { LangsysApp, createLocaleStore, type iLangsysInitConfig } from './app.js';
+
 let storageInstalled = false;
 
 /**
