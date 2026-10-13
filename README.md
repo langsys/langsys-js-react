@@ -527,8 +527,6 @@ Treat a settled promise **and** `useCurrentLocale() === requested` as the only s
 // not yet ->  anything else
 ```
 
-This holds for one switch at a time. A switch made while an earlier one is still fetching can end with `useCurrentLocale()` naming the new locale while the page shows the earlier locale's text, which is also stored as the new locale's catalog until that locale is fetched again.
-
 A mismatch is not a failure test: right after a successful fetch settles, the locale has not been written yet. Nothing public tells a failed fetch apart from one that succeeded a moment ago, so if you need an error state, use your own timeout. The SDK logs a failed fetch to the console as an error.
 
 After a failure, the SDK does not fetch that locale again for a backoff window (3 s, doubling with each consecutive failure up to 5 minutes); switching back to it inside the window renders what the failure did. `LangsysApp.refresh()` fetches at once; await the promise it returns, since it does not replace `translationsLoadingPromise`. Setting the locale store to the value it already holds does nothing.

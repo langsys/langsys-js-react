@@ -32,7 +32,7 @@
 
 ### Docs
 
-- **`translationsLoadingPromise` settles when the fetch ends, on failure as well as on success, and never rejects.** On success `t()` already returns the new locale's text when it settles, and `useCurrentLocale()` follows about 100 ms later. On failure the page renders the source text, or the catalog stored for that locale, and `useCurrentLocale()` keeps naming the last locale that loaded. The README says to treat a settled promise with a matching locale as the only sign a switch worked, for one switch at a time, and that an error state needs the app's own timeout.
+- **`translationsLoadingPromise` settles when the fetch ends, on failure as well as on success, and never rejects.** On success `t()` already returns the new locale's text when it settles, and `useCurrentLocale()` follows about 100 ms later. On failure the page renders the source text, or the catalog stored for that locale, and `useCurrentLocale()` keeps naming the last locale that loaded. The README says to treat a settled promise with a matching locale as the only sign a switch worked, and that an error state needs the app's own timeout.
 
 ## 0.6.7 - 2026-08-21
 
