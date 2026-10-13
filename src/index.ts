@@ -114,6 +114,12 @@ export { localeHeaders } from 'langsys-js-typescript';
 // way before comparing against `useCurrentLocale()` / `detectPreferredLocale()`.
 export { canonicalizeLocale } from 'langsys-js-typescript';
 
+// Pure interpolation helper: `interpolate(text, params, locale)` fills a string's
+// placeholders, ICU included, where the hooks cannot run. Re-exported because
+// `langsys-js-typescript` is a plain dependency of this package, not a peer, so
+// a consumer importing it directly breaks under pnpm / Yarn PnP.
+export { interpolate } from 'langsys-js-typescript';
+
 // API client (vanilla — no React concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 

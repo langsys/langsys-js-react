@@ -23,11 +23,16 @@
 - **A value that can't be named is not registered.** Without the build transform, a value interpolated in `<Translate>` or `<Phrase>` markup splits the text around it, and the component registers nothing for that unit rather than one phrase per value — on its own render path and when it falls back to the SDK's DOM translation — and the SDK notes it once as a debug notice. Translations already in the catalog still render. A value that is an element's only text can't be told from literal text at runtime, so that block registers the text it renders; enable the transform for those.
 - **`localeHeaders()`** re-exported: the `Accept-Language` header for the user's chosen locale, for an app's calls to its own API.
 - **`<LangsysProvider seed>` for Next.js's App Router.** The root layout opens the request's scope and passes `scope.seed()` to the provider; `useT()`, `useCurrentLocale()`, `useTranslations()`, `<Translate>` and `<Phrase>` then render the request's locale on the server, and the browser hydrates from the same catalog with no mismatch. Requires the core's `scopeFromSeed`.
+- **`interpolate` re-exported.** `interpolate(text, params, locale)` fills a string's placeholders, ICU included, where the hooks cannot run. `langsys-js-typescript` is a plain dependency of this package rather than a peer, so importing it from there resolves under npm's hoisting and fails under pnpm, Yarn PnP or `--no-hoist`.
 - **E2E testbed** (`example/Testbed.tsx` + `example/e2e/write-gating.mjs`, `npm run test:e2e`) — drives a real browser against a live API and asserts on captured request payloads *and* response status.
 
 ### Fixed
 
 - **`useWriteEnabled()` hydration safety.** It pins `getServerSnapshot` to `undefined` rather than reusing the live signal getter. React uses that snapshot for the hydration render as well as the server render, so reading the live value there makes a session whose authorization resolved before hydration render markup disagreeing with the server HTML, and React discards the subtree.
+
+### Docs
+
+- **`translationsLoadingPromise` settles when the fetch ends, on failure as well as on success, and never rejects.** On success `t()` already returns the new locale's text when it settles, and `useCurrentLocale()` follows about 100 ms later. On failure the page renders the source text, or the catalog stored for that locale, and `useCurrentLocale()` keeps naming the last locale that loaded. The README says to treat a settled promise with a matching locale as the only sign a switch worked, and that an error state needs the app's own timeout.
 
 ## 0.6.7 - 2026-08-21
 

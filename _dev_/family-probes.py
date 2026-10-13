@@ -45,7 +45,9 @@ FAMILIES = {
     'CAT':   (r'missingToken|__uncategorized__|lookupCat|hasOwnProperty', r'\bsTranslations\b'),
     'REG':   (r'\bfetch\(|XMLHttpRequest|keepalive|sendBeacon|createTranslatableItems|updateTokens|setTimeout|setInterval|queueMicrotask', r'\buseEffect\b'),
     'HINT':  (r'discovery|page_url|sessionStorage|localStorage|location\.href|normalizeHintUrl', r'\bcreateElement\b'),
-    'ICU':   (r'\binterpolate\b|\bisICU\b|IntlMessageFormat|\bplural\b|\bselectordinal\b', r'\bTFunction\b'),
+    # Re-exporting the core's interpolate by reference is not participation; importing it to call
+    # it here would be, and the call still fires.
+    'ICU':   (r"\binterpolate\b(?!\s*\}\s*from\s*'langsys-js-typescript')|\bisICU\b|IntlMessageFormat|\bplural\b|\bselectordinal\b", r'\bTFunction\b'),
     'CID':   (r'generateCustomId|\bmd5\b|createHash|\bsha1\b', r'\bcustom_id\b'),
     'TOK':   (r'tokenizeElement|TreeWalker|\bchildNodes\b|\bnodeType\b|aria-label|data-tooltip', r'\bcreateElement\b'),
     'MARK':  (r'data-langsys-|getAttribute\(|querySelector|\.closest\(', r'PHRASE_MARKER_ATTR'),

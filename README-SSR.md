@@ -139,7 +139,7 @@ export function LocaleSwitcher() {
 
     function changeLocale(next: string) {
         setLocale(next); // subscribers in the SDK trigger a fetch
-        return LangsysApp.translationsLoadingPromise; // optional: await the in-flight fetch
+        return LangsysApp.translationsLoadingPromise; // optional: settles when the fetch ends (success OR failure)
     }
 
     return (
@@ -151,6 +151,8 @@ export function LocaleSwitcher() {
     );
 }
 ```
+
+> `translationsLoadingPromise` settles when the fetch ends, on failure as well as on success, so it does not mean the new language is showing. [Waiting for translations to load](./README.md#waiting-for-translations-to-load) covers how to tell the two apart.
 
 > Keep one locale store for the app (created where you call `init`) and thread `setLocale` down via context or props, rather than calling `useLocaleStore` with a fresh initial value in unrelated trees.
 

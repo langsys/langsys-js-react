@@ -460,9 +460,9 @@ await setWriteGrant(undefined); // clear on logout — session returns to read-o
 
 ## Server-Side Rendering (Next.js, Remix)
 
-The SDK is SSR-compatible. The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration. `useT` and friends are built on `useSyncExternalStore` with a server snapshot, so they hydrate without a flash of untranslated content when seeded.
+Each server request renders inside a **request scope** of its own, with its own locale, catalog and misses, so concurrent visitors never see each other's language. `renderInRequestScope` from `langsys-js-react/server` opens one around a render. `useT()`, `<Translate>` and `<Phrase>` render the request's locale on the server, so the served HTML is translated. The scope's seed, handed to the browser before hydration (`LangsysApp.seedCatalog`, or `<LangsysProvider seed>` in the Next App Router), makes the first client render match it.
 
-📖 **See [README-SSR.md](./README-SSR.md)** for a complete Next.js (App Router & Pages Router) walkthrough.
+📖 **See [README-SSR.md](./README-SSR.md)** for the walkthrough, including the Next.js App Router.
 
 ## Utilities
 
@@ -507,15 +507,31 @@ fetch('/api/orders', { headers: { ...localeHeaders() } }); // Accept-Language: e
 
 ### Waiting for translations to load
 
-When changing locale mid-session, you may want to re-run dependent code after the new translations arrive:
+When changing locale mid-session, you may want to re-run dependent code once the fetch ends:
 
 ```tsx
 useEffect(() => {
     LangsysApp.translationsLoadingPromise.then(() => {
-        // re-render content / regenerate UI here
+        // re-run dependent code here
     });
 }, [locale]);
 ```
+
+`translationsLoadingPromise` settles when the catalog fetch **ends**, whether it succeeded or failed. It never rejects.
+
+- **On success**, the new catalog is in place when it settles, so `t()` already returns the new locale's text. `useCurrentLocale()` follows about 100 ms later, so read it from a later render, not inside `.then()`.
+- **On failure**, the page renders the source text, or the catalog stored for that locale from an earlier visit. `useCurrentLocale()` keeps naming the last locale that loaded and never reaches the requested one, so a component that waits only for `useCurrentLocale() === requested` waits forever.
+
+Treat a settled promise **and** `useCurrentLocale() === requested` as the only sign that the switch worked:
+
+```tsx
+// loaded  ->  settled && currentLocale === locale
+// not yet ->  anything else
+```
+
+A mismatch is not a failure test: right after a successful fetch settles, the locale has not been written yet. Nothing public tells a failed fetch apart from one that succeeded a moment ago, so if you need an error state, use your own timeout. The SDK logs a failed fetch to the console as an error.
+
+After a failure, the SDK does not fetch that locale again for a backoff window (3 s, doubling with each consecutive failure up to 5 minutes); switching back to it inside the window renders what the failure did. `LangsysApp.refresh()` fetches at once. Setting the locale store to the value it already holds does nothing.
 
 ## License
 

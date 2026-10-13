@@ -70,6 +70,7 @@ t, currentlyLoadedLocale, sTranslations  // raw Signals; prefer the hooks in com
 createSignal                 // re-exported generic Signal factory
 localeHeaders()              // re-exported by reference (FRM-6): { 'Accept-Language': current locale } for the app's own API calls
 canonicalizeLocale(locale)   // re-exported BCP 47 normalizer — LOWERCASES ('en-US' → 'en-us'), per WIRE-3; the SDK canonicalizes all locale input since base 0.3.0
+interpolate(text, params, locale)  // re-exported pure helper (ICU included) for where hooks can't run; the core is a dependency, not a peer, so importing it directly breaks under pnpm / Yarn PnP
 
 // Write gating (ticket 838; requires the unreleased base SDK build that carries it)
 // NOTE: the raw `writeEnabled` signal is deliberately NOT re-exported — see the
