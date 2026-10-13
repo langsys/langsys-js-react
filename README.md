@@ -85,15 +85,13 @@ Locale identifiers are canonicalized by the base SDK: `'en-US'`, `'EN-US'` and `
 
 ### SSR token strategy
 
-`ssrTokenStrategy` (default `'client'`) controls when tokens found during a *server* render are registered. It acts on an SDK instance running inside the rendering process, so it does something only if `LangsysApp.init()` has run in that process.
+`ssrTokenStrategy` (default `'client'`) decides what a request scope's `close()` does with the phrases and blocks its [server render](#server-side-rendering-nextjs-remix) missed. The scope reads it from `LangsysApp.init()` in the rendering process, so it applies only where the server calls `init()` too. A client-only app like the one above has no server render, and a server that never calls `init()` sends nothing from the server.
 
-**In a client-only app like the one above, and in Next.js as documented in [README-SSR.md](./README-SSR.md), it is inert** — `init()` runs in a `useEffect`, which never executes on the server, so there is no instance for the option to act on. See [Discovering server-rendered content](./README-SSR.md#discovering-server-rendered-content) for what that means for content rendered in Server Components, and how `<Translate>` / `<Phrase>` cover it.
+- `'client'` (default) — nothing is sent from the server; the browser registers what it renders after hydration.
+- `'server'` — `close()` sends the misses from the server when the server's key may write. They originate from your server's IP rather than a browser's.
+- `'auto'` — `close()` sends a list of fewer than five from the server and leaves a longer one to the browser.
 
-The option matters only in genuinely isomorphic deployments — a custom server, or same-process SSR where `init()` runs in the rendering process:
-
-- `'client'` (default) — nothing is registered from the server render; content that also renders on the client is caught there.
-- `'server'` — registered directly from the server render, originating from your server's IP rather than a browser's.
-- `'auto'` — small batches (≤5) from the server, larger ones deferred to the client.
+With a `writeGrant` configured the server sends nothing under any strategy, because a grant makes write capability per user, and the SDK warns that the strategy is degraded to `'client'`. [README-SSR.md](./README-SSR.md#what-a-server-render-translates-and-discovers) lists what a server render translates and what it discovers.
 
 ## Using translations
 
