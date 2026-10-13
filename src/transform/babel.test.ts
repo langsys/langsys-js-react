@@ -79,6 +79,11 @@ describe('<Translate> and <Phrase> children', () => {
         expect(code).toContain('params={{ value: a + b }}>Total %value%');
         expect(meta.warnings).toEqual([{ line: 2, column: 42, source: 'a + b', name: 'value' }]);
     });
+
+    it('two unnameable values are two placeholders and two params, even of the same kind', () => {
+        const { code } = run(IMPORT + 'const A = ({ a, b, c, d }) => <Translate>Sum {a + b}, product {c * d}</Translate>;');
+        expect(code).toContain('params={{ value: a + b, value_2: c * d }}>Sum %value%, product %value_2%');
+    });
 });
 
 describe('t() calls', () => {
@@ -90,6 +95,11 @@ describe('t() calls', () => {
     it('string concatenation too, with no category', () => {
         const { code } = run(IMPORT + "function A({ user }) { const t = useT(); return t('Hello ' + user.firstName + '!'); }");
         expect(code).toContain('t("Hello {first_name}!", undefined, { first_name: user.firstName })');
+    });
+
+    it('two calls on unnameable arguments are two placeholders and two params', () => {
+        const { code } = run(IMPORT + 'function A({ a, b, c, d }) { const t = useT(); return t(`${fmt(a + b)} of ${fmt(c * d)}`, "UI"); }');
+        expect(code).toContain('t("{value} of {value_2}", "UI", { value: fmt(a + b), value_2: fmt(c * d) })');
     });
 
     it('existing params are merged', () => {

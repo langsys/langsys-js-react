@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { LangsysApp, createLocaleStore } from '../index.js';
 import { startContractFixture, sleep, type ContractFixture } from '../test-helpers/contract-fixture.js';
 import { catalog } from '../test-helpers/ssr-scope.js';
-import { Cart, Greeting, Inbox, Signed } from './fixtures/app.js';
+import { Cart, Formatted, Greeting, Inbox, Signed, Totals } from './fixtures/app.js';
 
 let fx: ContractFixture;
 
@@ -65,6 +65,10 @@ describe('the placeholder transform, rendered for several users', () => {
         for (const n of [1, 3]) texts.push(await show(el(Cart, { items: Array(n).fill(0) })));
         for (const name of ['Ana', 'Bo']) texts.push(await show(el(Signed, { user: { name } })));
         for (const count of [2, 9]) texts.push(await show(el(Inbox, { inbox: { count } })));
+        for (const v of [{ a: 1, b: 2, c: 3, d: 4 }, { a: 2, b: 3, c: 5, d: 6 }]) {
+            texts.push(await show(el(Totals, v)));
+            texts.push(await show(el(Formatted, v)));
+        }
         await sleep(1500);
 
         expect(texts).toEqual([
@@ -76,12 +80,19 @@ describe('the placeholder transform, rendered for several users', () => {
             'Signed in as Bo',
             'You have 2 new messages',
             'You have 9 new messages',
+            // Two unnameable values are two placeholders: each shows its own value.
+            'Sum 3, product 12',
+            '#3 of #12',
+            'Sum 5, product 30',
+            '#5 of #30',
         ]);
         expect(await stored()).toEqual([
             'A:Hello {first_name}, welcome back',
             'B:You have {items_count} items',
             'C:Signed in as {m0o}{name}{m0c}',
             'D:You have {inbox_count} new messages',
+            'E:Sum {value}, product {value_2}',
+            'F:{value} of {value_2}',
         ]);
     }, 60_000);
 

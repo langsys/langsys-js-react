@@ -24,3 +24,14 @@ export function Inbox({ inbox }: { inbox: { count: number } }) {
     const t = useT();
     return <p>{t(`You have ${inbox.count} new messages`, 'D')}</p>;
 }
+
+export function Totals({ a, b, c, d }: { a: number; b: number; c: number; d: number }) {
+    return <Translate category="E">Sum {a + b}, product {c * d}</Translate>;
+}
+
+const fmt = (n: number) => `#${n}`;
+
+export function Formatted({ a, b, c, d }: { a: number; b: number; c: number; d: number }) {
+    const t = useT();
+    return <p>{t(`${fmt(a + b)} of ${fmt(c * d)}`, 'F')}</p>;
+}
