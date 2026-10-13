@@ -87,11 +87,11 @@ Locale identifiers are canonicalized by the base SDK: `'en-US'`, `'EN-US'` and `
 
 `ssrTokenStrategy` (default `'client'`) decides what a request scope's `close()` does with the phrases and blocks its [server render](#server-side-rendering-nextjs-remix) missed. The scope reads it from `LangsysApp.init()` in the rendering process, so it applies only where the server calls `init()` too. A client-only app like the one above has no server render, and a server that never calls `init()` sends nothing from the server.
 
-- `'client'` (default) — nothing is sent from the server; the browser registers what it renders after hydration.
-- `'server'` — `close()` sends the misses from the server when the server's key may write. They originate from your server's IP rather than a browser's.
+- `'client'` (default) — the server sends nothing. The browser registers the misses after hydration when its session may write, and otherwise reports the page for discovery.
+- `'server'` — `close()` sends the misses from the server, from your server's IP rather than a browser's.
 - `'auto'` — `close()` sends a list of fewer than five from the server and leaves a longer one to the browser.
 
-With a `writeGrant` configured the server sends nothing under any strategy, because a grant makes write capability per user, and the SDK warns that the strategy is degraded to `'client'`. [README-SSR.md](./README-SSR.md#what-a-server-render-translates-and-discovers) lists what a server render translates and what it discovers.
+The server sends only when its own key may write; otherwise its misses go to the browser as under `'client'`. With a `writeGrant` configured the server sends nothing under any strategy, because a grant makes write capability per user, and the SDK warns that the strategy is degraded to `'client'`. [README-SSR.md](./README-SSR.md#what-a-server-render-translates-and-discovers) lists what a server render translates and what it discovers.
 
 ## Using translations
 
@@ -458,7 +458,7 @@ await setWriteGrant(undefined); // clear on logout — session returns to read-o
 
 ## Server-Side Rendering (Next.js, Remix)
 
-Each server request renders inside a **request scope** of its own, with its own locale, catalog and misses, so concurrent visitors never see each other's language. `renderInRequestScope` from `langsys-js-react/server` opens one around a render. `useT()`, `<Translate>` and `<Phrase>` render the request's locale on the server, so the served HTML is translated. The scope's seed, handed to the browser before hydration (`LangsysApp.seedCatalog`, or `<LangsysProvider seed>` in the Next App Router), makes the first client render match it.
+Each server request renders inside a **request scope** of its own, with its own locale, catalog and misses, so concurrent visitors never see each other's language. `renderInRequestScope` from `langsys-js-react/server` opens one around a render. Once the server process has called `LangsysApp.init()`, `useT()`, `<Translate>` and `<Phrase>` render the request's locale on the server, so the served HTML is translated, apart from the blocks [README-SSR](./README-SSR.md#what-a-server-render-translates-and-discovers) lists as translated in the browser. The scope's seed, handed to the browser before hydration (`LangsysApp.seedCatalog`, or `<LangsysProvider seed>` in the Next App Router), makes the first client render match it.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for the walkthrough, including the Next.js App Router.
 
@@ -518,7 +518,7 @@ useEffect(() => {
 `translationsLoadingPromise` settles when the catalog fetch **ends**, whether it succeeded or failed. It never rejects.
 
 - **On success**, the new catalog is in place when it settles, so `t()` already returns the new locale's text. `useCurrentLocale()` follows about 100 ms later, so read it from a later render, not inside `.then()`.
-- **On failure**, the page renders the source text, or the catalog stored for that locale from an earlier visit. `useCurrentLocale()` keeps naming the last locale that loaded and never reaches the requested one, so a component that waits only for `useCurrentLocale() === requested` waits forever.
+- **On failure**, the page renders the source text, or the catalog stored for that locale from an earlier load. `useCurrentLocale()` keeps naming the last locale that loaded (`''` before any has) and never reaches the requested one, so a component that waits only for `useCurrentLocale() === requested` waits forever.
 
 Treat a settled promise **and** `useCurrentLocale() === requested` as the only sign that the switch worked:
 
@@ -527,9 +527,11 @@ Treat a settled promise **and** `useCurrentLocale() === requested` as the only s
 // not yet ->  anything else
 ```
 
+This holds for one switch at a time. A switch made while an earlier one is still fetching can end with `useCurrentLocale()` naming the new locale while the page shows the earlier locale's text, which is also stored as the new locale's catalog until that locale is fetched again.
+
 A mismatch is not a failure test: right after a successful fetch settles, the locale has not been written yet. Nothing public tells a failed fetch apart from one that succeeded a moment ago, so if you need an error state, use your own timeout. The SDK logs a failed fetch to the console as an error.
 
-After a failure, the SDK does not fetch that locale again for a backoff window (3 s, doubling with each consecutive failure up to 5 minutes); switching back to it inside the window renders what the failure did. `LangsysApp.refresh()` fetches at once. Setting the locale store to the value it already holds does nothing.
+After a failure, the SDK does not fetch that locale again for a backoff window (3 s, doubling with each consecutive failure up to 5 minutes); switching back to it inside the window renders what the failure did. `LangsysApp.refresh()` fetches at once; await the promise it returns, since it does not replace `translationsLoadingPromise`. Setting the locale store to the value it already holds does nothing.
 
 ## License
 

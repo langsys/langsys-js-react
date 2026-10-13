@@ -13,9 +13,19 @@ This package's server entry, `langsys-js-react/server`, opens a scope around one
 ```tsx
 // server.tsx
 import { renderToString } from 'react-dom/server';
+import { LangsysApp, createLocaleStore } from 'langsys-js-react';
 import { renderInRequestScope } from 'langsys-js-react/server';
 
+// Once per process: request scopes fetch catalogs, and close() sends misses, with this project and key.
+const ready = LangsysApp.init({
+    projectid: PROJECT_ID,
+    key: SERVER_KEY,
+    UserLocaleStore: createLocaleStore('en'),
+    baseLocale: 'en',
+});
+
 app.get('*', async (req, res) => {
+    await ready;
     const locale = resolveLocale(req); // your framework's or app's resolved locale
 
     const { result: html, seed, close } = await renderInRequestScope(
@@ -32,6 +42,7 @@ app.get('*', async (req, res) => {
 });
 ```
 
+- `LangsysApp.init()` in the server process supplies the project and key a scope fetches its catalog with. Without it, a scope not given `catalog` renders source text.
 - `renderInRequestScope({ locale, catalog?, url? }, render)` opens a scope, runs `render` inside it and resolves once it has finished. The scope fetches the locale's catalog at most once per request, shared read-only with other requests rendering the same locale; pass `catalog` when you already have it (from a snapshot or your own fetch).
 - Inside the render, `useT()` and `LangsysApp.t` read this request's catalog.
 - `seed` is `{ locale, catalog, blocks, phrases }`: the catalog this request rendered with, the content blocks it served, and the misses it collected.
@@ -42,7 +53,7 @@ Where your framework cannot wrap its render in a function, open the scope and en
 ```ts
 import { createRequestScope, installRequestScopeStorage } from 'langsys-js-react/server';
 
-installRequestScopeStorage(); // once, at startup
+installRequestScopeStorage(); // once, at startup, beside LangsysApp.init() as above
 
 // in the request handler, before rendering:
 const scope = await createRequestScope({ locale, url });
