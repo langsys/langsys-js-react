@@ -4,7 +4,9 @@
  * VAR-6's Test, end to end: with the transform enabled (the Vite plugin, in this repo's test
  * config), components interpolating a user's value register one phrase with the placeholder
  * across users, measured against the contract fixture's stored state; the placeholder is named
- * per VAR-2; and a plural translation of that phrase renders from the param.
+ * per VAR-2; a value inside a subtree that is not translated is marked (VAR-3), so the phrase and
+ * the block's stored content hold its placeholder and the page shows the value; and a plural
+ * translation of that phrase renders from the param.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, createElement as el, type ReactNode } from 'react';
@@ -12,7 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { LangsysApp, createLocaleStore } from '../index.js';
 import { startContractFixture, sleep, type ContractFixture } from '../test-helpers/contract-fixture.js';
 import { catalog } from '../test-helpers/ssr-scope.js';
-import { Cart, Formatted, Greeting, Inbox, Signed, Totals } from './fixtures/app.js';
+import { Account, AccountBlock, AccountHost, Cart, Formatted, Greeting, Inbox, ReplyTo, Signed, Totals } from './fixtures/app.js';
 
 let fx: ContractFixture;
 
@@ -108,4 +110,52 @@ describe('the placeholder transform, rendered for several users', () => {
         expect(await show(el(Cart, { items: [0, 0, 0] }))).toBe('Tienes 3 artículos');
         expect(await show(el(Greeting, { user: { firstName: 'Ana' } }))).toBe('Hola Ana, bienvenido de nuevo');
     }, 30_000);
+
+    it('a value inside <DontTranslate> or translate="no" registers as its placeholder and shows as it is', async () => {
+        const users = ['ana@example.com', 'bo@example.com'];
+        const texts: string[] = [];
+        for (const email of users) {
+            texts.push(await show(el(Account, { user: { email } })));
+            texts.push(await show(el(AccountBlock, { user: { email } })));
+            texts.push(await show(el(AccountHost, { user: { email } })));
+            texts.push(await show(el(ReplyTo, { user: { email } })));
+        }
+        await sleep(1500);
+
+        expect(texts).toEqual(
+            users.flatMap((email) => [
+                `Signed in as ${email} today`,
+                `Signed in as ${email} todayManage your account`,
+                `Reply to ${email} soon`,
+                `Reply to ${email} soon`,
+            ]),
+        );
+        const p = (await fx.state()).projects.p1;
+        const phrases = (category: string) => p.phrases.filter((x) => x.category === category).map((x) => x.phrase);
+        expect(phrases('G')).toEqual(['Signed in as {m0o}{email}{m0c} today']);
+        expect(phrases('J')).toEqual(['Reply to {m0o}{email}{m0c} soon']);
+        const block = (category: string) => p.blocks.filter((b) => b.category === category);
+        const blocks = { H: block('H')[0], I: block('I')[0] };
+        expect([block('H').length, block('I').length]).toEqual([1, 1]);
+        expect(blocks.H.phrases.map((x) => x.phrase)).toEqual(['Signed in as', 'today', 'Manage your account']);
+        expect(blocks.H.content).toBe(
+            '<p>Signed in as <span translate="no" data-ls-dont-translate=""><span data-ls-param="email">{email}</span></span> today</p>' +
+                '<p>Manage your account</p>',
+        );
+        expect(blocks.I.phrases.map((x) => x.phrase)).toEqual(['Reply to', 'soon']);
+        expect(blocks.I.content).toBe('<p>Reply to <span translate="no"><span data-ls-param="email">{email}</span></span> soon</p>');
+        expect(JSON.stringify(p)).not.toMatch(/example\.com/);
+    }, 60_000);
+
+    it('a marked value in a <Phrase> shows its new value when it changes', async () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        await act(async () => root.render(el(Account, { user: { email: 'cy@example.com' } })));
+        expect(host.textContent).toBe('Signed in as cy@example.com today');
+        await act(async () => root.render(el(Account, { user: { email: 'di@example.com' } })));
+        expect(host.textContent).toBe('Signed in as di@example.com today');
+        await act(async () => root.unmount());
+        host.remove();
+    });
 });

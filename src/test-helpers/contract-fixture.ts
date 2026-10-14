@@ -14,7 +14,12 @@ export interface AcceptedState {
         string,
         {
             phrases: Array<{ category: string | null; phrase: string }>;
-            blocks: Array<{ category: string | null; custom_id: string; phrases: Array<{ phrase: string }> }>;
+            blocks: Array<{
+                category: string | null;
+                custom_id: string;
+                content: string | null;
+                phrases: Array<{ phrase: string }>;
+            }>;
         }
     >;
     hints: Array<{ project_id: string; url: string }>;

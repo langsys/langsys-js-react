@@ -94,6 +94,68 @@ describe('<Translate> and <Phrase> children', () => {
     });
 });
 
+describe('a value in a subtree that is not translated', () => {
+    const DNT = "import { Translate, Phrase, DontTranslate } from 'langsys-js-react';\n";
+
+    it('is marked where it is, in both components, and travels as no param', () => {
+        const { code } = run(
+            DNT +
+                'const A = ({ user }) => <Phrase>Signed in as <DontTranslate>{user.email}</DontTranslate></Phrase>;\n' +
+                'const B = ({ user }) => <Translate>Signed in as <DontTranslate>{user.email}</DontTranslate></Translate>;',
+        );
+        expect(code).toContain(
+            '<Phrase>Signed in as <DontTranslate><span data-ls-param="email">{user.email}</span></DontTranslate></Phrase>',
+        );
+        expect(code).toContain(
+            '<Translate>Signed in as <DontTranslate><span data-ls-param="email">{user.email}</span></DontTranslate></Translate>',
+        );
+        expect(code).not.toContain('params');
+    });
+
+    it('beside a replaced value, named in one sequence: only the replaced one is a param', () => {
+        // `user.name` and `a.name` collide on `name` across the two forms, so both are qualified.
+        const { code } = run(
+            DNT + 'const A = ({ user, a }) => <Phrase>Hi {user.name}, <DontTranslate>{a.name} {user.name}</DontTranslate></Phrase>;',
+        );
+        expect(code).toContain('<Phrase params={{ user_name: user.name }}>Hi %user_name%, <DontTranslate>');
+        expect(code).toContain(
+            '<span data-ls-param="a_name">{a.name}</span> <span data-ls-param="user_name">{user.name}</span>',
+        );
+    });
+
+    it('inside any element of the subtree, and under a host element that opts out the way the core reads it', () => {
+        const { code } = run(
+            DNT +
+                'const A = ({ a, b, c, d, e }) => <Translate><DontTranslate><b>{a}</b></DontTranslate>' +
+                '<span translate="no">{b}</span><span translate="NO">{c}</span><span data-notrans>{d}</span>' +
+                '<span data-notrans="yes">{e}</span></Translate>;',
+        );
+        for (const n of ['a', 'b', 'c', 'd', 'e']) expect(code).toContain(`<span data-ls-param="${n}">{${n}}</span>`);
+        expect(code).not.toContain('params');
+    });
+
+    it('an attribute that does not opt out, or is only known at runtime, leaves the value a param', () => {
+        const { code } = run(
+            DNT +
+                'const A = ({ a, b, c, x }) => <Translate><span data-notrans="false">{a}</span>' +
+                '<span data-notrans=" 0 ">{b}</span><span translate={x}>{c}</span></Translate>;',
+        );
+        expect(code).toContain('params={{ a: a, b: b, c: c }}');
+        expect(code).not.toContain('data-ls-param');
+    });
+
+    it('a value already marked is left alone, and DontTranslate is recognised under another name only from this package', () => {
+        const { code } = run(
+            "import { Phrase, DontTranslate as Keep } from 'langsys-js-react';\n" +
+                "import { DontTranslate } from 'elsewhere';\n" +
+                'const A = ({ a, b, c }) => <Phrase><span data-ls-param="who">{a}</span> <Keep>{b}</Keep> <DontTranslate>{c}</DontTranslate></Phrase>;',
+        );
+        expect(code).toContain('<span data-ls-param="who">{a}</span> <Keep><span data-ls-param="b">{b}</span></Keep>');
+        expect(code).toContain('<DontTranslate>{c}</DontTranslate>');
+        expect(code).not.toContain('params');
+    });
+});
+
 describe('t() calls', () => {
     it('a template literal becomes a phrase with placeholders and params', () => {
         const { code } = run(IMPORT + 'function A({ items }) { const t = useT(); return t(`You have ${items.length} items`, "Cart"); }');

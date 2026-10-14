@@ -22,7 +22,9 @@ export interface DontTranslateProps {
  * The host carries the standard `translate="no"` attribute, which both the
  * tokenizer and the renderer in the base SDK already honor — so its content is
  * never tokenized, registered, or replaced. Pure presentational glue; no
- * vanilla handler needed.
+ * vanilla handler needed. Inside `<Translate>` / `<Phrase>` the block mapping reads it as the host
+ * element it renders (`toBlockNodes`), so the unit around it stays on the core's tree path, and the
+ * build transform marks a value inside it rather than replacing it (VAR-3).
  *
  * `data-ls-dont-translate` is a **wrapper-level hook only** — a styling and
  * debugging handle. The base SDK has never matched on it (verified against

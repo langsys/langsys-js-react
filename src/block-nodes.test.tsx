@@ -1,7 +1,8 @@
 import { Fragment, createElement as el, lazy, Suspense, createContext } from 'react';
 import { createPortal } from 'react-dom';
 import { describe, expect, it } from 'vitest';
-import { toBlockNodes } from './block-nodes.js';
+import { hasRuntimeValues, toBlockNodes } from './block-nodes.js';
+import { DontTranslate } from './components/DontTranslate.js';
 
 describe('toBlockNodes', () => {
     it('maps host elements, attributes, strings and numbers; fragments and arrays flatten', () => {
@@ -59,5 +60,24 @@ describe('toBlockNodes', () => {
     ])('%s makes the tree unmappable, with a reason', (_name, child) => {
         const r = toBlockNodes(el('p', null, 'Hello ', child));
         expect(r.ok).toBe(false);
+    });
+});
+
+describe('<DontTranslate> in a unit', () => {
+    it('maps to the host element it renders, so the unit stays a tree', () => {
+        const r = toBlockNodes(['Signed in as ', el(DontTranslate, { tag: 'kbd', className: 'id' }, 'a@b.c'), ' today']);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.nodes).toEqual([
+            { text: 'Signed in as ' },
+            { tag: 'kbd', attrs: { translate: 'no', 'data-ls-dont-translate': '', class: 'id' }, children: [{ text: 'a@b.c' }] },
+            { text: ' today' },
+        ]);
+        expect(r.elements.map((e) => e.type)).toEqual(['kbd']);
+    });
+
+    it('a value split inside it is a runtime value, as inside any host element', () => {
+        expect(hasRuntimeValues(['Hi ', el(DontTranslate, null, 'Mr ', 'Ana')])).toBe(true);
+        expect(hasRuntimeValues(['Hi ', el(DontTranslate, null, 'Kangen')])).toBe(false);
     });
 });

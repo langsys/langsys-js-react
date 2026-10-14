@@ -2,7 +2,7 @@
  * Components written as an app writes them, importing the package by name. The placeholder
  * transform rewrites them when they are loaded (spec VAR-6); nothing here names a placeholder.
  */
-import { Phrase, Translate, useT } from 'langsys-js-react';
+import { DontTranslate, Phrase, Translate, useT } from 'langsys-js-react';
 
 export function Greeting({ user }: { user: { firstName: string } }) {
     return <Translate category="A">Hello {user.firstName}, welcome back</Translate>;
@@ -34,4 +34,39 @@ const fmt = (n: number) => `#${n}`;
 export function Formatted({ a, b, c, d }: { a: number; b: number; c: number; d: number }) {
     const t = useT();
     return <p>{t(`${fmt(a + b)} of ${fmt(c * d)}`, 'F')}</p>;
+}
+
+type Account = { user: { email: string } };
+
+export function Account({ user }: Account) {
+    return (
+        <Phrase category="G">
+            Signed in as <DontTranslate>{user.email}</DontTranslate> today
+        </Phrase>
+    );
+}
+
+export function AccountBlock({ user }: Account) {
+    return (
+        <Translate category="H">
+            <p>Signed in as <DontTranslate>{user.email}</DontTranslate> today</p>
+            <p>Manage your account</p>
+        </Translate>
+    );
+}
+
+export function AccountHost({ user }: Account) {
+    return (
+        <Translate category="I">
+            <p>Reply to <span translate="no">{user.email}</span> soon</p>
+        </Translate>
+    );
+}
+
+export function ReplyTo({ user }: Account) {
+    return (
+        <Phrase category="J">
+            Reply to <span translate="no">{user.email}</span> soon
+        </Phrase>
+    );
 }

@@ -260,7 +260,7 @@ import { DontTranslate } from 'langsys-js-react';
 Built with <DontTranslate>Kangen®</DontTranslate> on <DontTranslate>langsys.dev</DontTranslate>
 ```
 
-Renders the host with `translate="no"`, which the base SDK's tokenizer and renderer already honor — the content is never tokenized, registered, or replaced.
+Renders the host with `translate="no"`, which the base SDK's tokenizer and renderer already honor — the content is never tokenized, registered, or replaced. Inside `<Translate>` and `<Phrase>` it is that host element, so the block around it renders on the server like any other markup. A value written inside it is shown as it is; see [Variables in translated text](#variables-in-translated-text) for how the build transform keeps it out of what Langsys stores.
 
 `<DontTranslate>` props: `tag?` (defaults to `span`), `className?`, `children`.
 
@@ -299,6 +299,15 @@ export default withLangsys({ /* your config */ });
 ```
 
 It only touches files that import `langsys-js-react`, and only `<Translate>` and `<Phrase>` imported from it and `t` obtained from `useT()`. String and number literals stay text; JSX, conditionals and components inside a block are left as they are.
+
+A value inside a part that is not translated — `<DontTranslate>`, or an element with `translate="no"` or `data-notrans` — is shown exactly as written, so the transform leaves it where it is and marks it as a value (`<span data-ls-param="email">`) instead of replacing it. Langsys never stores the value: a block's stored content holds the placeholder `{email}` in its place.
+
+```tsx
+<Translate>
+    <p>Signed in as <DontTranslate>{user.email}</DontTranslate></p>
+</Translate>
+// registers the tokens "Signed in as"; the page shows the address
+```
 
 **Names** are the same in every Langsys SDK, derived from the expression in snake_case: `user.firstName` → `first_name`, `items.length` → `items_count`, `price.value` → `price`, `formatDate(order.date)` → `date`. Two values that would share a name are told apart by the segment before it (`a.name`, `b.name` → `a_name`, `b_name`), and the same named expression written twice is one placeholder. An expression no name can be derived from — `a + b`, a ternary, a call with several arguments — is named `value`, `value_2`, …, one placeholder each time it appears, even when the same expression repeats, and the build warns about it; give it a name yourself with `%name%` and `params`, which always wins.
 

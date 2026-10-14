@@ -4,11 +4,12 @@
  *
  * What is mapped is exactly what the client's DOM walk would see: host elements with their
  * attributes, strings and numbers. Fragments, arrays and conditional `null` / `false` flatten
- * away, as they do in the DOM. A portal renders outside the host on both sides, so it is kept
- * for rendering but excluded from the nodes. A child whose DOM is unknown until React renders
- * it — a function or class component, a provider, `lazy`, `Suspense` — or whose content is an
- * HTML string (`dangerouslySetInnerHTML`) makes the block unmappable: it is not server-rendered,
- * and its source is served as it is (fleet rule).
+ * away, as they do in the DOM. `<DontTranslate>` is this package's own and renders one host
+ * element from its props, so it is mapped as that element. A portal renders outside the host on
+ * both sides, so it is kept for rendering but excluded from the nodes. A child whose DOM is
+ * unknown until React renders it — any other function or class component, a provider, `lazy`,
+ * `Suspense` — or whose content is an HTML string (`dangerouslySetInnerHTML`) makes the block
+ * unmappable: it is not server-rendered, and its source is served as it is (fleet rule).
  *
  * `elements[i]` is the React element that the `i`th element node of `nodes`, counted in document
  * order, came from. That is what the core's `source` back-reference on a translated element
@@ -17,6 +18,7 @@
  */
 import { Children, Fragment, cloneElement, isValidElement, type ReactElement, type ReactNode, type ReactPortal } from 'react';
 import type { BlockNode, RenderedNode } from 'langsys-js-typescript';
+import { DontTranslate, type DontTranslateProps } from './components/DontTranslate.js';
 
 export type Mapped =
     | { ok: true; nodes: BlockNode[]; elements: ReactElement[]; portals: ReactPortal[] }
@@ -67,6 +69,7 @@ export function toBlockNodes(children: ReactNode): Mapped {
             }
             const props = node.props as Record<string, unknown>;
             if (node.type === Fragment) return Children.toArray(props.children as ReactNode).forEach(visit);
+            if (node.type === DontTranslate) return visit(DontTranslate(props as DontTranslateProps));
             if (typeof node.type !== 'string') {
                 failure = 'a component, provider, lazy or Suspense child, whose DOM is unknown until React renders it';
                 return;
@@ -119,8 +122,9 @@ export function toReactNodes(nodes: readonly RenderedNode[], elements: readonly 
  * (spec VAR-7). Literal JSX text reaches React as one string per run, so a text run split across
  * adjacent children — a string beside a number, or two strings that are not whitespace-only —
  * holds an interpolation (`Hello {name}` arrives as `['Hello ', 'Ana']`). Checked at every level
- * of host elements and fragments. A value that is the only text of its element (`<b>{name}</b>`)
- * cannot be told from literal text at runtime; only the build transform recovers it.
+ * of host elements, fragments and `<DontTranslate>`. A value that is the only text of its element
+ * (`<b>{name}</b>`) cannot be told from literal text at runtime; only the build transform recovers
+ * it.
  */
 export function hasRuntimeValues(children: ReactNode): boolean {
     let run: Array<string | number | bigint> = [];
@@ -135,7 +139,7 @@ export function hasRuntimeValues(children: ReactNode): boolean {
             continue;
         }
         if (flush()) return true;
-        if (isValidElement(c) && (typeof c.type === 'string' || c.type === Fragment)) {
+        if (isValidElement(c) && (typeof c.type === 'string' || c.type === Fragment || c.type === DontTranslate)) {
             if (hasRuntimeValues((c.props as { children?: ReactNode }).children)) return true;
         }
     }

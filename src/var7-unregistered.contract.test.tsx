@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, createElement as el, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { logger } from 'langsys-js-typescript';
-import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
+import { DontTranslate, LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
 
 let fx: ContractFixture;
@@ -78,6 +78,16 @@ describe('values the build transform did not rewrite', () => {
             'Static sentence',
         ]);
         expect(await stored()).toEqual(['S:Static sentence']);
+    }, 60_000);
+
+    it('a value split inside <DontTranslate> registers nothing either', async () => {
+        const texts: string[] = [];
+        for (const name of ['Ana', 'Bo']) {
+            texts.push(await show(el(Phrase, { category: 'G' }, 'Signed in as ', el(DontTranslate, null, 'user ', name))));
+        }
+        await sleep(1500);
+        expect(texts).toEqual(['Signed in as user Ana', 'Signed in as user Bo']);
+        expect((await stored()).filter((s) => s.startsWith('G:'))).toEqual([]);
     }, 60_000);
 
     // The DOM-class path: a block holding a component falls back to the core's Translate class,
