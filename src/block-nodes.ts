@@ -17,7 +17,7 @@
  * position, which a translation may have moved.
  */
 import { Children, Fragment, cloneElement, isValidElement, type ReactElement, type ReactNode, type ReactPortal } from 'react';
-import type { BlockNode, RenderedNode } from 'langsys-js-typescript';
+import { isTranslationExcluded, type BlockNode, type RenderedNode } from 'langsys-js-typescript';
 import { DontTranslate, type DontTranslateProps } from './components/DontTranslate.js';
 
 export type Mapped =
@@ -125,8 +125,13 @@ export function toReactNodes(nodes: readonly RenderedNode[], elements: readonly 
  * of host elements, fragments and `<DontTranslate>`. A value that is the only text of its element
  * (`<b>{name}</b>`) cannot be told from literal text at runtime; only the build transform recovers
  * it.
+ *
+ * With `skipExcluded`, for a `<Phrase>`, a subtree that is not translated (`<DontTranslate>`, or
+ * an element the core's `isTranslationExcluded` excludes) is not read: the phrase keys it as one
+ * empty markup pair whatever it holds (TOK-1), so a value inside it never enters the phrase. A
+ * `<Translate>` block stores that subtree in its content, so there it still counts.
  */
-export function hasRuntimeValues(children: ReactNode): boolean {
+export function hasRuntimeValues(children: ReactNode, skipExcluded = false): boolean {
     let run: Array<string | number | bigint> = [];
     const flush = () => {
         const hit = run.some((p) => typeof p !== 'string') || run.filter((p) => String(p).trim() !== '').length > 1;
@@ -139,9 +144,18 @@ export function hasRuntimeValues(children: ReactNode): boolean {
             continue;
         }
         if (flush()) return true;
-        if (isValidElement(c) && (typeof c.type === 'string' || c.type === Fragment || c.type === DontTranslate)) {
-            if (hasRuntimeValues((c.props as { children?: ReactNode }).children)) return true;
-        }
+        if (!isValidElement(c)) continue;
+        const node = c.type === DontTranslate ? DontTranslate(c.props as DontTranslateProps) : c;
+        if (typeof node.type !== 'string' && node.type !== Fragment) continue;
+        const props = node.props as Record<string, unknown>;
+        if (skipExcluded && typeof node.type === 'string' && isTranslationExcluded(attributeReader(node.type, attrsOf(props)))) continue;
+        if (hasRuntimeValues(props.children as ReactNode, skipExcluded)) return true;
     }
     return false;
+}
+
+/** A mapped element's attributes (`attrsOf`, as the tree path hands them to the core), in the shape the core's exclusion reads. */
+function attributeReader(tagName: string, attrs: Record<string, string> | undefined) {
+    const valueOf = (name: string) => Object.entries(attrs ?? {}).find(([key]) => key === name)?.[1];
+    return { tagName, getAttribute: (name: string) => valueOf(name) ?? null, hasAttribute: (name: string) => valueOf(name) !== undefined };
 }

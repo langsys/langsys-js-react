@@ -14,7 +14,7 @@
  * `data-notrans` — is shown as written: a phrase keys it as one opaque element and restores its
  * content, and a block keeps it in its stored content. A value there therefore stays where it is,
  * in both components, and is marked as a value (VAR-3) rather than replaced, so the page shows the
- * value and the core stores its placeholder:
+ * value and a block's stored content holds its placeholder:
  *
  *   <Translate>Signed in as <DontTranslate>{user.email}</DontTranslate></Translate>
  *     → <Translate>Signed in as <DontTranslate><span data-ls-param="email">{user.email}</span></DontTranslate></Translate>

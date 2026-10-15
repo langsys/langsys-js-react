@@ -80,4 +80,24 @@ describe('<DontTranslate> in a unit', () => {
         expect(hasRuntimeValues(['Hi ', el(DontTranslate, null, 'Mr ', 'Ana')])).toBe(true);
         expect(hasRuntimeValues(['Hi ', el(DontTranslate, null, 'Kangen')])).toBe(false);
     });
+
+    it('in a phrase, a subtree that is not translated is not read; a value elsewhere still is', () => {
+        const excluded = [
+            el(DontTranslate, null, 'Mr ', 'Ana'),
+            el('span', { translate: 'no' }, 'Mr ', 'Ana'),
+            el('span', { translate: 'NO' }, 'Mr ', 'Ana'),
+            el('span', { 'data-notrans': true }, 'Mr ', 'Ana'),
+            el('span', { 'data-notrans': 'yes' }, el('b', null, 'Mr ', 'Ana')),
+        ];
+        for (const child of excluded) {
+            expect(hasRuntimeValues(['Hi ', child], true)).toBe(false);
+            expect(hasRuntimeValues(['Hi ', child])).toBe(true);
+        }
+        // Not an opt-out, as the core reads it: the value counts in a phrase too.
+        const optedBackIn: Array<Record<string, string>> = [{ 'data-notrans': 'false' }, { 'data-notrans': ' 0 ' }, { translate: 'yes' }];
+        for (const attrs of optedBackIn) {
+            expect(hasRuntimeValues(['Hi ', el('span', attrs, 'Mr ', 'Ana')], true)).toBe(true);
+        }
+        expect(hasRuntimeValues(['Hi ', 'Ana', el(DontTranslate, null, 'Kangen')], true)).toBe(true);
+    });
 });

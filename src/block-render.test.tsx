@@ -12,7 +12,7 @@ import { act, createElement as el } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
+import { DontTranslate, LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
 import { renderInRequestScope } from './server.js';
 import { catalog } from './test-helpers/ssr-scope.js';
 
@@ -95,6 +95,18 @@ describe('the seed a scope hands the client (SRV-4)', () => {
         const id = /data-ls-contentblock="([^"]+)"/.exec(html)?.[1];
         expect(id).toBeTruthy();
         expect(seed.blocks[id!]).toMatchObject({ customId: id, category: 'UI', shape: 'block' });
+    });
+});
+
+describe('<DontTranslate> inside a unit', () => {
+    it('stays on the tree path: a server render translates the phrase around it and shows it as written', async () => {
+        const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
+        const SIGNED = catalog({ UI: { 'Signed in as {m0o}{m0c} today': 'Conectado como {m0o}{m0c} hoy' } });
+        const tree = el(Phrase, { category: 'UI' }, 'Signed in as ', el(DontTranslate, null, 'ana@example.com'), ' today');
+        const { result: html, close } = await renderInRequestScope({ locale: 'es-es', catalog: SIGNED }, () => renderToString(tree));
+        await close();
+        expect(html).toContain('Conectado como <span translate="no" data-ls-dont-translate="">ana@example.com</span> hoy');
+        expect(notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('was served as source'))).toEqual([]);
     });
 });
 

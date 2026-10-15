@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { act, createElement } from 'react';
+import { Component, act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { LangsysApp, LangsysConfigurationError, Phrase, Translate, createLocaleStore } from './index.js';
+import { LangsysApp, LangsysConfigurationError, Phrase, Translate, createLocaleStore, useT } from './index.js';
 import { LangsysConfigurationError as fromServerEntry } from './server.js';
 import { LangsysConfigurationError as fromCore } from 'langsys-js-typescript';
 
@@ -83,6 +83,41 @@ describe('requireCredentials with no credentials', () => {
 
     it('the page still shows the text as written', () => {
         expect(el.textContent).toBe('HelloWorldHello worldAnaWelcome BoTwoWelcome CyAnaHey Di!');
+    });
+
+    // Boot did not throw (init() above resolved unconfigured); the framework's function throws at
+    // its first use instead.
+    it("useT()'s t throws LangsysConfigurationError at first use", async () => {
+        const caught: unknown[] = [];
+        class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+            state = { failed: false };
+            static getDerivedStateFromError() {
+                return { failed: true };
+            }
+            componentDidCatch(error: unknown) {
+                caught.push(error);
+            }
+            render() {
+                return this.state.failed ? 'failed' : this.props.children;
+            }
+        }
+        function Greeting() {
+            const t = useT();
+            return t('Hello', 'UI');
+        }
+        const host = document.createElement('div');
+        const boundaryRoot = createRoot(host);
+        const quiet = console.error;
+        console.error = () => {};
+        try {
+            await act(async () => boundaryRoot.render(createElement(Boundary, null, createElement(Greeting))));
+        } finally {
+            console.error = quiet;
+        }
+        expect(host.textContent).toBe('failed');
+        expect(caught).toHaveLength(1);
+        expect(caught[0]).toBeInstanceOf(LangsysConfigurationError);
+        act(() => boundaryRoot.unmount());
     });
 
     it('the error class is the core’s, from both entries', () => {

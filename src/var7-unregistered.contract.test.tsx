@@ -80,14 +80,25 @@ describe('values the build transform did not rewrite', () => {
         expect(await stored()).toEqual(['S:Static sentence']);
     }, 60_000);
 
-    it('a value split inside <DontTranslate> registers nothing either', async () => {
+    // A phrase keys a subtree that is not translated as one empty pair (TOK-1), so a value split
+    // inside <DontTranslate> never enters it: both users register the one phrase, and each page
+    // shows its own value.
+    it('a value split inside <DontTranslate> in a <Phrase> registers the phrase without it', async () => {
         const texts: string[] = [];
         for (const name of ['Ana', 'Bo']) {
             texts.push(await show(el(Phrase, { category: 'G' }, 'Signed in as ', el(DontTranslate, null, 'user ', name))));
         }
-        await sleep(1500);
+        await until(async () => (await stored()).some((s) => s.startsWith('G:')));
+        await sleep(1000);
         expect(texts).toEqual(['Signed in as user Ana', 'Signed in as user Bo']);
-        expect((await stored()).filter((s) => s.startsWith('G:'))).toEqual([]);
+        expect((await stored()).filter((s) => s.startsWith('G:'))).toEqual(['G:Signed in as {m0o}{m0c}']);
+    }, 60_000);
+
+    // A block stores that subtree in its content, so there the value still registers nothing.
+    it('a value split inside <DontTranslate> in a <Translate> registers nothing', async () => {
+        for (const name of ['Ana', 'Bo']) await show(el(Translate, { category: 'K' }, el('p', null, 'Signed in as ', el(DontTranslate, null, 'user ', name))));
+        await sleep(1500);
+        expect((await stored()).filter((s) => s.startsWith('K:'))).toEqual([]);
     }, 60_000);
 
     // The DOM-class path: a block holding a component falls back to the core's Translate class,

@@ -78,8 +78,9 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
         ? [{ tag, attrs: { [PHRASE_MARKER_ATTR]: '' }, children: mapped.nodes }]
         : null;
     // A value interpolated without the build transform cannot be named, so the unit registers
-    // nothing (VAR-7); what the catalog already holds still renders.
-    const unnamedValues = hasRuntimeValues(children);
+    // nothing (VAR-7); what the catalog already holds still renders. One inside a subtree that is
+    // not translated is not read: the phrase keys that subtree as one empty pair (TOK-1).
+    const unnamedValues = hasRuntimeValues(children, true);
     const options = { category, params, ...(unnamedValues ? { register: false } : {}) };
     // Under a <LangsysProvider>, the server and hydration renders read the request's scope.
     const inSeedScope = useSeedScopeRunner();
