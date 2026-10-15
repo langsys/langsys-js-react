@@ -110,6 +110,36 @@ describe('<DontTranslate> inside a unit', () => {
     });
 });
 
+describe('<DontTranslate> at the edge of a paragraph', () => {
+    const EDGE = catalog({ EDGE: { 'Built with': 'Hecho con', 'is ours': 'es nuestro' } });
+    const last = (category: string) =>
+        el(Translate, { category }, el('p', null, 'Built with ', el(DontTranslate, null, 'Kangen')));
+    const first = (category: string) =>
+        el(Translate, { category }, el('p', null, el(DontTranslate, null, 'Kangen'), ' is ours'));
+
+    it('keeps the space beside it, as source and translated, in the browser and on a server', async () => {
+        LangsysApp.seedCatalog(EDGE, 'es-es');
+        const shown: string[] = [];
+        for (const tree of [last('SOURCE'), first('SOURCE'), last('EDGE'), first('EDGE')]) {
+            const host = document.createElement('div');
+            document.body.appendChild(host);
+            const root = createRoot(host);
+            await act(async () => root.render(tree));
+            shown.push(host.querySelector('p')!.innerHTML);
+            await act(async () => root.unmount());
+        }
+        const kangen = '<span translate="no" data-ls-dont-translate="">Kangen</span>';
+        expect(shown).toEqual([`Built with ${kangen}`, `${kangen} is ours`, `Hecho con ${kangen}`, `${kangen} es nuestro`]);
+
+        const { result: html, close } = await renderInRequestScope({ locale: 'es-es', catalog: EDGE }, () =>
+            renderToString(el('div', null, last('EDGE'), first('EDGE'))),
+        );
+        await close();
+        expect(html).toContain(`<p>Hecho con ${kangen}</p>`);
+        expect(html).toContain(`<p>${kangen} es nuestro</p>`);
+    });
+});
+
 describe('a block the tree path cannot render', () => {
     function Badge() {
         return el('b', null, 'New');
