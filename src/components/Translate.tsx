@@ -11,7 +11,7 @@ import {
     type BlockOptions,
     type ParamPrimitive,
 } from 'langsys-js-typescript';
-import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
+import { hasRuntimeValues, toBlockNodes, toReactNodes, withNodeParams } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
 
@@ -46,6 +46,12 @@ export interface TranslateProps {
     /** Class applied to the host element. */
     className?: string;
     children?: ReactNode;
+    /**
+     * Set by the build transform when the block would store a value it left as written (inside
+     * MathML or SVG, `<script>` or `<style>`, or an element that holds text only): the block
+     * registers nothing (VAR-7) and renders what the catalog holds.
+     */
+    'data-ls-unnamed'?: string;
 }
 
 /**
@@ -68,19 +74,23 @@ export function Translate({
     category = '',
     custom_id = '',
     label = '',
-    params,
+    params: given,
     tag = 'translate',
     className,
-    children,
+    children: content,
+    'data-ls-unnamed': unmarked,
 }: TranslateProps) {
+    // A param that is an element or a list renders in its place, not as text.
+    const { children, params } = given ? withNodeParams(content, given) : { children: content, params: given };
     const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
     const hostRef = useRef<HTMLElement | null>(null);
     const instanceRef = useRef<VanillaTranslate>(undefined);
     const mapped = toBlockNodes(children);
     // `id` is the app's own id for the block: rendered and registered under it (MARK-1).
-    // A value interpolated without the build transform cannot be named, so the unit registers
-    // nothing (VAR-7); what the catalog already holds still renders.
-    const unnamedValues = hasRuntimeValues(children);
+    // A value the build transform did not name (it is not enabled, or the value is a conditional),
+    // or one it left as written, has no name, so the unit registers nothing (VAR-7); what the
+    // catalog already holds still renders.
+    const unnamedValues = unmarked !== undefined || hasRuntimeValues(children);
     const options: BlockOptions = {
         category,
         params,
@@ -97,7 +107,7 @@ export function Translate({
         if (!mapped.ok || !rendered || rendered.shape === 'empty') return;
         // With a value the transform did not name, `options` carries `register: false`: the call
         // registers nothing and still claims the host.
-        if (unnamedValues) warnUnnamed();
+        if (unnamedValues) warnUnnamed(unmarked !== undefined);
         // `host` claims the element for this component, so an enclosing <Translate> that fell back
         // to the core's DOM class leaves it alone instead of taking it over with its own params
         // (MARK-2), and lets the core check the block's ancestors for a resolved marker (GATE-10).
@@ -124,7 +134,7 @@ export function Translate({
     useEffect(() => {
         const host = hostRef.current;
         if (mapped.ok || !host) return;
-        if (unnamedValues) warnUnnamed();
+        if (unnamedValues) warnUnnamed(unmarked !== undefined);
         const instance = new VanillaTranslate(host, {
             category,
             custom_id,
@@ -153,17 +163,23 @@ export function Translate({
         );
     }
     // An explicit `custom_id` is the block's identity as the app gave it, so the host carries it
-    // from the first render — on a server too (spec MARK-1).
+    // from the first render — on a server too (spec MARK-1). A list `withNodeParams` rebuilt from the
+    // unit's own children goes back as separate children, as JSX passed them, so React does not check
+    // it for keys as it would a list.
     return createElement(
         tag,
         { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
-        children,
+        ...(children !== content && Array.isArray(children) ? children : [children]),
     );
 }
 
 /** The core's once-per-reason debug notice for a unit it did not register (VAR-7). */
-function warnUnnamed(): void {
-    warnUnregistered('a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)');
+function warnUnnamed(unmarked: boolean): void {
+    warnUnregistered(
+        unmarked
+            ? 'a value the build transform left as written: inside MathML or SVG, <script> or <style>, or an element that holds text only'
+            : 'a value the build transform did not name: it is not enabled (langsys-js-react/vite, /babel or /next), or the value is a conditional, which it leaves as written',
+    );
 }
 
 export default Translate;

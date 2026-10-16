@@ -94,6 +94,18 @@ describe('values the build transform did not rewrite', () => {
         expect((await stored()).filter((s) => s.startsWith('G:'))).toEqual(['G:Signed in as {m0o}{m0c}']);
     }, 60_000);
 
+    // Notation is opaque in a phrase the same way (TOK-1).
+    it('a value split inside <math> in a <Phrase> registers the phrase without it', async () => {
+        const texts: string[] = [];
+        for (const n of [3, 4]) {
+            texts.push(await show(el(Phrase, { category: 'Q' }, 'Total ', el('math', null, el('mn', null, 'n = ', n)), ' units')));
+        }
+        await until(async () => (await stored()).some((s) => s.startsWith('Q:')));
+        await sleep(1000);
+        expect(texts).toEqual(['Total n = 3 units', 'Total n = 4 units']);
+        expect((await stored()).filter((s) => s.startsWith('Q:'))).toEqual(['Q:Total {m0o}{m0c} units']);
+    }, 60_000);
+
     // A block stores that subtree in its content, so there the value still registers nothing.
     it('a value split inside <DontTranslate> in a <Translate> registers nothing', async () => {
         for (const name of ['Ana', 'Bo']) await show(el(Translate, { category: 'K' }, el('p', null, 'Signed in as ', el(DontTranslate, null, 'user ', name))));
@@ -137,8 +149,32 @@ describe('values the build transform did not rewrite', () => {
         logger.debugEnabled = debugWas;
         const messages = notice.mock.calls
             .map((c) => c.join(' '))
-            .filter((m) => m.includes('a value interpolated without the build transform'));
+            .filter((m) => m.includes('a value the build transform did not name'));
         expect(messages).toHaveLength(1);
         expect(messages[0]).toContain('langsys-js-react/vite, /babel or /next');
+        expect(messages[0]).toContain('a conditional, which it leaves as written');
+    }, 30_000);
+
+    it('a unit the build transform flagged reports where it left a value as written', async () => {
+        const debugWas = logger.debugEnabled;
+        logger.debugEnabled = true;
+        const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
+        await show(el(Translate, { category: 'E', 'data-ls-unnamed': '' }, el('p', null, 'Notes'), el('textarea', { translate: 'no', defaultValue: 'x' })));
+        logger.debugEnabled = debugWas;
+        const messages = notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('a value the build transform left as written'));
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('inside MathML or SVG, <script> or <style>, or an element that holds text only');
+    }, 30_000);
+
+    it('a phrase the build transform flagged reports where it left a value as written', async () => {
+        const debugWas = logger.debugEnabled;
+        logger.debugEnabled = true;
+        const notice = vi.spyOn(console, 'log').mockImplementation(() => {});
+        notice.mockClear();
+        await show(el(Phrase, { category: 'E', 'data-ls-unnamed': '' }, 'Rated ', el('svg', null, el('title', null, 'stars'))));
+        logger.debugEnabled = debugWas;
+        const messages = notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('a value the build transform left as written'));
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('in a phrase whose values are all marked: in a translated <svg>, or an element that holds text only');
     }, 30_000);
 });

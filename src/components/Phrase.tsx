@@ -11,7 +11,7 @@ import {
     type BlockNode,
     type ParamPrimitive,
 } from 'langsys-js-typescript';
-import { hasRuntimeValues, toBlockNodes, toReactNodes } from '../block-nodes.js';
+import { hasRuntimeValues, toBlockNodes, toReactNodes, withNodeParams } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
 
@@ -34,6 +34,13 @@ export interface PhraseProps {
     /** Class applied to the host element. */
     className?: string;
     children?: ReactNode;
+    /**
+     * Set by the build transform when every value of the phrase is marked (it holds a marker of its
+     * own) and one in its translated text stands where no marker can (in a translated `<svg>`, or an
+     * element that holds text only), so it is left as written: the phrase registers nothing (VAR-7)
+     * and renders what the catalog holds.
+     */
+    'data-ls-unnamed'?: string;
 }
 
 /**
@@ -67,7 +74,16 @@ export interface PhraseProps {
  * Keep children static (literal markup): the handler takes over the rendered
  * subtree. For values React owns and re-renders, pass them through `params`.
  */
-export function Phrase({ category = '', params = {}, tag = 'span', className, children }: PhraseProps) {
+export function Phrase({
+    category = '',
+    params: given = {},
+    tag = 'span',
+    className,
+    children: content,
+    'data-ls-unnamed': unmarked,
+}: PhraseProps) {
+    // A param that is an element or a list renders in its place, not as text.
+    const { children, params } = withNodeParams(content, given ?? {});
     const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
     const hostRef = useRef<HTMLElement | null>(null);
     const instanceRef = useRef<VanillaPhrase>(undefined);
@@ -77,10 +93,11 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     const unit: BlockNode[] | null = mapped.ok
         ? [{ tag, attrs: { [PHRASE_MARKER_ATTR]: '' }, children: mapped.nodes }]
         : null;
-    // A value interpolated without the build transform cannot be named, so the unit registers
-    // nothing (VAR-7); what the catalog already holds still renders. One inside a subtree that is
-    // not translated is not read: the phrase keys that subtree as one empty pair (TOK-1).
-    const unnamedValues = hasRuntimeValues(children, true);
+    // A value the build transform did not name (it is not enabled, or the value is a conditional)
+    // has no name, so the unit registers nothing (VAR-7); what the catalog already holds still
+    // renders. One inside a subtree that is not translated is not read: the phrase keys that
+    // subtree as one empty pair (TOK-1).
+    const unnamedValues = unmarked !== undefined || hasRuntimeValues(children, true);
     const options = { category, params, ...(unnamedValues ? { register: false } : {}) };
     // Under a <LangsysProvider>, the server and hydration renders read the request's scope.
     const inSeedScope = useSeedScopeRunner();
@@ -91,7 +108,7 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
         if (!unit) return;
         // With a value the transform did not name, `options` carries `register: false`: the call
         // registers nothing and still claims the host.
-        if (unnamedValues) warnUnnamed();
+        if (unnamedValues) warnUnnamed(unmarked !== undefined);
         // `host` claims the element for this component, so an enclosing <Translate> that fell back
         // to the core's DOM class leaves it alone (MARK-2), and lets the core check the phrase's
         // ancestors for a resolved marker (GATE-10), walking from its parent: the phrase element's
@@ -115,7 +132,7 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
     useEffect(() => {
         const host = hostRef.current;
         if (mapped.ok || !host) return;
-        if (unnamedValues) warnUnnamed();
+        if (unnamedValues) warnUnnamed(unmarked !== undefined);
         const instance = new VanillaPhrase(host, {
             category,
             params,
@@ -143,12 +160,22 @@ export function Phrase({ category = '', params = {}, tag = 'span', className, ch
             ...mapped.portals,
         );
     }
-    return createElement(tag, { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' }, children);
+    // A list `withNodeParams` rebuilt from the unit's own children goes back as separate children, as
+    // JSX passed them, so React does not check it for keys as it would a list.
+    return createElement(
+        tag,
+        { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' },
+        ...(children !== content && Array.isArray(children) ? children : [children]),
+    );
 }
 
 /** The core's once-per-reason debug notice for a unit it did not register (VAR-7). */
-function warnUnnamed(): void {
-    warnUnregistered('a value interpolated without the build transform (langsys-js-react/vite, /babel or /next)');
+function warnUnnamed(unmarked: boolean): void {
+    warnUnregistered(
+        unmarked
+            ? 'a value the build transform left as written in a phrase whose values are all marked: in a translated <svg>, or an element that holds text only'
+            : 'a value the build transform did not name: it is not enabled (langsys-js-react/vite, /babel or /next), or the value is a conditional, which it leaves as written',
+    );
 }
 
 export default Phrase;
