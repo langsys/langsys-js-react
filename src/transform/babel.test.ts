@@ -549,8 +549,91 @@ describe('t() calls', () => {
         // With no params to fill it, a `{count}` the text writes is the value's own: an ICU argument on it.
         const icu = run(IMPORT + 'function D({ count }) { const t = useT(); return t(`${count} {count, plural, one {item} other {items}} selected`); }');
         expect(icu.code).toContain('t("{count} {count, plural, one {item} other {items}} selected", undefined, { count: count })');
+        // A params literal names every key it passes: a `{count}` it does not pass is the value's own.
+        const literal = run(
+            IMPORT +
+                'function E({ count, x }) { const t = useT(); return t(`${count} {count, plural, one {item} other {items}} selected`, "C", { x }); }\n' +
+                'function F({ count }) { const t = useT(); return t(`${count} {count, plural, one {item} other {items}}`, "C", { count: 5 }); }\n' +
+                'function G({ count, extra }) { const t = useT(); return t(`${count} {count, plural, one {item} other {items}}`, "C", { ...extra }); }',
+        );
+        expect(literal.code).toContain('t("{count} {count, plural, one {item} other {items}} selected", "C", { x, count: count })');
+        // A key the literal passes is the developer's, and one it may hold through a spread is too.
+        expect(literal.code).toContain('t("{count_2} {count, plural, one {item} other {items}}", "C", { count: 5, count_2: count })');
+        expect(literal.code).toContain('t("{count_2} {count, plural, one {item} other {items}}", "C", { ...extra, count_2: count })');
         expect(code).toContain('<Translate params={{ ...params, user_name: user.name }}><img alt="%name%" /> Bought by %user_name%</Translate>');
         expect(code).toContain('<Translate params={{ ...params, user_name: user.name }}>%name% and %user_name%</Translate>');
+    });
+});
+
+// A block's tokens include each attribute a translator reads (the core's TRANSLATABLE_ATTRIBUTES,
+// and the value of a button or a submit or button input): a value there is a placeholder too.
+describe('<Translate> attributes a translator reads', () => {
+    it('a value in the attribute is a placeholder; in its text it is written as JavaScript writes it', () => {
+        const { code } = run(
+            IMPORT +
+                'const A = ({ user, url }) => <Translate><img alt={`Photo of ${user.name}`} src={url} /> Hi {user.name}</Translate>;\n' +
+                "const B = ({ author }) => <Translate><p title={'By ' + author + '!'}>Read</p></Translate>;\n" +
+                'const C = ({ product }) => <Translate><img alt={product.name} /><p>Buy</p></Translate>;\n' +
+                'const D = ({ n }) => <Translate><p aria-label={`${n}`}>Count</p></Translate>;\n' +
+                'const E = ({ total }) => <Translate><button value={`Pay ${total}`}>Go</button><input type="Submit" value={`Pay ${total}`} /></Translate>;\n' +
+                'const F = ({ name }) => <Translate><svg aria-label={`Chart of ${name}`} /><textarea placeholder={`Write to ${name}`} /></Translate>;',
+        );
+        // A value also in the content, or the whole attribute, travels as given.
+        expect(code).toContain('<Translate params={{ name: user.name }}><img alt={"Photo of %name%"} src={url} /> Hi %name%</Translate>');
+        expect(code).toContain('<Translate params={{ author: "" + author }}><p title={"By %author%!"}>Read</p></Translate>');
+        expect(code).toContain('<Translate params={{ name: product.name }}><img alt={"%name%"} /><p>Buy</p></Translate>');
+        expect(code).toContain('<Translate params={{ n: `${n}` }}><p aria-label={"%n%"}>Count</p></Translate>');
+        expect(code).toContain('<Translate params={{ total: `${total}` }}><button value={"Pay %total%"}>Go</button><input type="Submit" value={"Pay %total%"} /></Translate>');
+        expect(code).toContain('<Translate params={{ name: `${name}` }}><svg aria-label={"Chart of %name%"} /><textarea placeholder={"Write to %name%"} /></Translate>');
+    });
+
+    // The core reads `%name%` left to right: after a `%` and a name it has not closed, a placeholder's
+    // own `%` would close it (`%s` then `%x%` reads `%s%`), so there it is written as `{name}`.
+    it('a placeholder after an unclosed `%` and a name is written in the stored form, in the text and in an attribute', () => {
+        const { code } = run(
+            IMPORT +
+                'const A = ({ x }) => <Translate><p title={`%s${x}`}>Hi</p> Use %s{x}</Translate>;\n' +
+                'const B = ({ a, x }) => <Translate>{a}b{x} and %who%s{x}!</Translate>;\n' +
+                'const C = ({ pct, x }) => <Translate><p title={`${pct}% of ${x}`}>Hi</p></Translate>;',
+        );
+        expect(code).toContain('<Translate params={{ x: x }}><p title={"%s{x}"}>Hi</p> Use %s&#123;x&#125;</Translate>');
+        expect(code).toContain('<Translate params={{ a: a, x: x }}>%a%b%x% and %who%s%x%!</Translate>');
+        expect(code).toContain('<Translate params={{ pct: `${pct}`, x: `${x}` }}><p title={"%pct%% of %x%"}>Hi</p></Translate>');
+        // The core drops C0 control characters before it reads placeholders, so `%s`, a bell and `%x%` read as `%s%`.
+        const bell = run(IMPORT + "const D = ({ x }) => <Translate><p title={`%s\\u0007${x}`}>Hi</p> Use %s{'\\u0007'}{x}</Translate>;");
+        expect(bell.code).toContain('title={"%s\\x07{x}"}');
+        expect(bell.code).toContain('&#123;x&#125;</Translate>');
+        // The core renders without dropping them, so `%s`, a bell, then `%s` and `%x%` would render as `%s%`.
+        const both = run(IMPORT + "const E = ({ x }) => <Translate><p title={`Use %s\\u0007%s${x}`}>Hi</p> Use %s{'\\u0007'}%s{x}</Translate>;");
+        expect(both.code).toContain('title={"Use %s\\x07%s{x}"}');
+        expect(both.code).toContain('%s&#123;x&#125;</Translate>');
+    });
+
+    it('an attribute the core shows as written, or does not read, is left as written', () => {
+        const { code, meta } = run(
+            IMPORT +
+                "import { DontTranslate } from 'langsys-js-react';\n" +
+                'const A = ({ open, url, v, name }) => <Translate><p title={open ? "Close" : "Open"} className={v} data-id={`row-${v}`}><a href={`/u/${name}`}>Hi</a></p></Translate>;\n' +
+                'const B = ({ v }) => <Translate><p>Hi <span translate="no" title={`Key ${v}`}>x</span> <DontTranslate><abbr title={`Key ${v}`}>y</abbr></DontTranslate></p></Translate>;\n' +
+                'const C = ({ v }) => <Translate><p>Hi <math alttext={`x ${v}`}><mi>x</mi></math> <input type="text" value={`x ${v}`} readOnly /></p></Translate>;\n' +
+                'const D = ({ name }) => <Phrase>See <abbr title={`About ${name}`}>it</abbr> now</Phrase>;',
+        );
+        expect(code).toContain('<Translate><p title={open ? "Close" : "Open"} className={v} data-id={`row-${v}`}><a href={`/u/${name}`}>Hi</a></p></Translate>;');
+        expect(code).toContain('<span translate="no" title={`Key ${v}`}>x</span> <DontTranslate><abbr title={`Key ${v}`}>y</abbr></DontTranslate>');
+        expect(code).toContain('<math alttext={`x ${v}`}><mi>x</mi></math> <input type="text" value={`x ${v}`} readOnly />');
+        expect(code).toContain('<Phrase>See <abbr title={`About ${name}`}>it</abbr> now</Phrase>');
+        expect(code).not.toContain('params');
+        expect(meta.rewritten).toBe(0);
+    });
+
+    it('where only the page knows whether the attribute is read, the value is left as written and the block registers nothing', () => {
+        const { code } = run(
+            IMPORT +
+                'const A = ({ mode, k }) => <Translate><p>Press <kbd translate={mode} title={`Key ${k}`}>x</kbd></p></Translate>;\n' +
+                'const B = ({ kind, total }) => <Translate><p>Pay <input type={kind} value={`Pay ${total}`} /></p></Translate>;',
+        );
+        expect(code).toContain('<Translate data-ls-unnamed=""><p>Press <kbd translate={mode} title={`Key ${k}`}>x</kbd></p></Translate>');
+        expect(code).toContain('<Translate data-ls-unnamed=""><p>Pay <input type={kind} value={`Pay ${total}`} /></p></Translate>');
     });
 });
 

@@ -72,12 +72,12 @@ function isUsable(node: unknown): node is Usable<unknown> {
 
 /** A value the core's params take (its `ParamPrimitive`): text, a number, a boolean, a date (from any realm). */
 function isParamValue(value: unknown): boolean {
-    return (
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        typeof value === 'boolean' ||
-        Object.prototype.toString.call(value) === '[object Date]'
-    );
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || isDate(value);
+}
+
+/** A date, from any realm. */
+function isDate(value: unknown): boolean {
+    return Object.prototype.toString.call(value) === '[object Date]';
 }
 
 /**
@@ -271,8 +271,14 @@ function attributeReader(tagName: string, attrs: Record<string, string> | undefi
  * is read once, and its items kept for the unit's next render, while a `Set` is read at each. Text inside host elements, fragments and
  * `<DontTranslate>` is searched, as the transform rewrites it; a node param with no placeholder is
  * dropped. A restored node is wrapped in a fragment keyed by its place in the run, so it never
- * shares a key with the unit's other elements and needs none of its own. Children with no node
- * param are returned as they are.
+ * shares a key with the unit's other elements and needs none of its own. A node's placeholder is
+ * found as the core reads placeholders, left to right (`%a%b%b%` is `%a%`, `b`, `%b%`), in either
+ * spelling: `%name%`, or the stored form `{name}`, which the transform writes where `%name%` would
+ * be misread. A host element's prop that is exactly a node's placeholder is given the value itself,
+ * which React writes as it writes any attribute value; a node's placeholder in an attribute's text is
+ * filled as JavaScript writes the value into a string (`String(value)`), the param the core fills the
+ * attribute with. Children
+ * with nothing to put back are returned as they are.
  */
 export function withNodeParams<P extends Readonly<Record<string, unknown>>>(
     children: ReactNode,
@@ -280,25 +286,62 @@ export function withNodeParams<P extends Readonly<Record<string, unknown>>>(
 ): { children: ReactNode; params: P } {
     const nodes: Record<string, ReactNode> = {};
     const rest: Record<string, unknown> = {};
+    /** The node values, by the placeholder (either spelling) that stands for one: a prop that is exactly one takes the value. */
+    const props: Record<string, unknown> = Object.create(null);
     for (const [name, param] of Object.entries(given)) {
         // A promise or a context is read as React reads one in place (`use`), and its value taken as given.
         const value = read && isUsable(param) ? read(param) : param;
         if (value === null || value === undefined) rest[name] = '';
         else if (typeof value === 'bigint') rest[name] = String(value);
         else if (isParamValue(value)) rest[name] = value;
-        else nodes[name] = isIterable(value) && !Array.isArray(value) ? itemsOf(value) : (value as ReactNode);
+        else {
+            nodes[name] = isIterable(value) && !Array.isArray(value) ? itemsOf(value) : (value as ReactNode);
+            props[`%${name}%`] = props[`{${name}}`] = value;
+        }
     }
     const names = Object.keys(nodes);
     if (!names.length) return { children, params: rest as P };
-    const split = new RegExp(`%(${names.map(literally).join('|')})%`);
+    // Placeholders as the core reads them, left to right: a node's in either spelling, `%name%` or the
+    // stored form `{name}`, and any other `%name%`, which is read first and so is left as text.
+    const alternatives = names.map(literally).join('|');
+    const split = new RegExp(`%(${alternatives})%|(%[A-Za-z_][A-Za-z0-9_]*%)|\\{(${alternatives})\\}`);
+
+    /** The node values an attribute holds in its text, which the core fills as text. */
+    const inText = new Set<string>();
+    /** A host element's props that are exactly one node value's placeholder. */
+    const ownProps = (element: Record<string, unknown>): Record<string, unknown> | undefined => {
+        let out: Record<string, unknown> | undefined;
+        for (const [prop, value] of Object.entries(element)) {
+            if (prop === 'children' || typeof value !== 'string') continue;
+            if (value in props) (out ??= {})[prop] = props[value];
+            else {
+                for (const match of value.matchAll(new RegExp(split.source, 'g'))) {
+                    const name = match[1] ?? match[3];
+                    if (name !== undefined) inText.add(name);
+                }
+            }
+        }
+        return out;
+    };
 
     const visit = (node: ReactNode): ReactNode => {
         if (typeof node === 'string') {
             const parts = node.split(new RegExp(split.source, 'g'));
-            if (parts.length === 1) return node;
-            return parts
-                .map((part, i) => (i % 2 ? createElement(Fragment, { key: i }, nodes[part]) : part))
-                .filter((part) => part !== '');
+            // Each match leaves the text before it, then a node's name in whichever spelling matched,
+            // or another placeholder, which stays text.
+            const out: ReactNode[] = [];
+            let text = '';
+            for (let i = 0; i < parts.length; i += 4) {
+                text += parts[i] + (parts[i + 2] ?? '');
+                const name = parts[i + 1] ?? parts[i + 3];
+                if (name === undefined) continue;
+                if (text) out.push(text);
+                text = '';
+                out.push(createElement(Fragment, { key: i + 1 }, nodes[name]));
+            }
+            if (out.length === 0) return node;
+            if (text) out.push(text);
+            return out;
         }
         if (Array.isArray(node)) {
             const kids = node.map(visit);
@@ -306,11 +349,15 @@ export function withNodeParams<P extends Readonly<Record<string, unknown>>>(
         }
         if (!isValidElement(node)) return node;
         if (typeof node.type !== 'string' && node.type !== Fragment && node.type !== DontTranslate) return node;
+        const attrs = typeof node.type === 'string' ? ownProps(node.props as Record<string, unknown>) : undefined;
         const own = (node.props as { children?: ReactNode }).children;
-        if (own === undefined) return node;
+        if (own === undefined) return attrs ? cloneElement(node, attrs) : node;
         const kids = Array.isArray(own) ? own.map(visit) : [visit(own)];
         const same = Array.isArray(own) ? kids.every((kid, i) => kid === own[i]) : kids[0] === own;
-        return same ? node : cloneElement(node, undefined, ...kids);
+        return same && !attrs ? node : cloneElement(node, attrs, ...kids);
     };
-    return { children: visit(children), params: rest as P };
+    const rendered = visit(children);
+    // An attribute's text is a string: a node value there fills it as JavaScript writes the value into one.
+    for (const name of inText) rest[name] = String(props[`%${name}%`]);
+    return { children: rendered, params: rest as P };
 }

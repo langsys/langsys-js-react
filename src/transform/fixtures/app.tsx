@@ -261,3 +261,36 @@ export function Rated({ n, label }: { n: number; label: string }) {
         </Phrase>
     );
 }
+
+export function Photo({ user }: { user: { name: string } }) {
+    return (
+        <Translate category="AT">
+            <img alt={`Photo of ${user.name}`} src="/p.png" /> Hi {user.name}
+        </Translate>
+    );
+}
+
+export function Avatar({ user }: { user: { name?: string; id: number } }) {
+    return (
+        <Translate category="AV">
+            <img alt={user.name} src="/a.png" />
+            <p title={`Profile of ${user.id}`}>Profile</p>
+        </Translate>
+    );
+}
+
+export function Format({ x }: { x: { name: string } }) {
+    return (
+        <Translate category="PS">
+            <p title={`%s${x.name}`}>Hi</p> Use %s{x.name}
+        </Translate>
+    );
+}
+
+export function Pictured({ x }: { x: string[] }) {
+    return (
+        <Translate category="PX">
+            <img data-tooltip={x} title={`Pic ${x}`} src="/x.png" /> Gallery
+        </Translate>
+    );
+}

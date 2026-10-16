@@ -188,9 +188,47 @@ describe('a param React renders as nodes', () => {
         }
     });
 
+    // A value an attribute's placeholder can't hold as text (one React renders as nodes: a list, an
+    // object) is put back where the placeholder stands, the whole prop, and React writes it as it
+    // writes any attribute value. Every other value fills the placeholder as it fills one in the text.
+    it('a prop that is exactly one placeholder takes a value React renders as nodes', () => {
+        const node = el('p', null, el('img', { alt: '%who%', title: 'By %who%' }), el('abbr', { title: '{tags}' }, 'x'));
+        const nodes = withNodeParams(node, { who: ['Ana', 'Bo'], tags: { toString: () => 'red' } });
+        expect(html(nodes.children)).toBe('<div><p><img alt="Ana,Bo" title="By %who%"/><abbr title="red">x</abbr></p></div>');
+        expect(nodes.params).toEqual({ who: 'Ana,Bo' });
+        // Nothing, a boolean, a number or a date fills it as text, as a placeholder the developer wrote is filled.
+        const text = withNodeParams(node, { who: undefined, tags: false, icon: el('i') });
+        expect(text.children).toBe(node);
+        expect(text.params).toEqual({ who: '', tags: false });
+    });
+
+    // An attribute's text is a string: a node value there fills its placeholder as JavaScript writes
+    // the value into a string, the param the core fills the attribute with.
+    it("a node value in an attribute's text fills it as JavaScript writes it into a string", () => {
+        const tags = ['ana', 'bo'];
+        const out = withNodeParams(el('p', null, el('img', { alt: '%tags%', title: 'Pic %tags%' }), el('b', null, '%tags%')), { tags });
+        expect(html(out.children)).toBe('<div><p><img alt="ana,bo" title="Pic %tags%"/><b>anabo</b></p></div>');
+        expect(out.params).toEqual({ tags: 'ana,bo' });
+        expect(withNodeParams(el('b', null, '%tags%'), { tags }).params).toEqual({});
+        expect(withNodeParams(el('img', { title: 'Pic %s{tags}' }), { tags }).params).toEqual({ tags: 'ana,bo' });
+    });
+
+    // The core reads `%name%` left to right: `%a%b%b%` is `%a%`, `b`, `%b%`, whichever names are nodes.
+    it('finds a placeholder where the core reads one, after the placeholders before it', () => {
+        const out = withNodeParams('%a%b%b% and %s{b}', { a: 'A', b: el('i') });
+        expect(html(out.children)).toBe('<div>%a%b<i></i> and %s<i></i></div>');
+    });
+
     // The SDK's params take no bigint; React renders one as its digits.
     it('a bigint is passed as its digits', () => {
         expect(withNodeParams('%n%', { n: BigInt('12345678901234567890') }).params).toEqual({ n: '12345678901234567890' });
+    });
+
+    // A placeholder the transform writes in the stored form, `{name}`, where `%name%` would be misread.
+    it('is put back at a placeholder in the stored form too', () => {
+        const out = withNodeParams('Press %s{icon} or %icon%', { icon: el('i') });
+        expect(html(out.children)).toBe('<div>Press %s<i></i> or <i></i></div>');
+        expect(out.params).toEqual({});
     });
 
     it('any param name, whatever characters it holds', () => {

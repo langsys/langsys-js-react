@@ -20,6 +20,8 @@ import {
     AccountHost,
     Area,
     AreaBlock,
+    Avatar,
+    Format,
     BigTotal,
     Byline,
     Cart,
@@ -38,6 +40,8 @@ import {
     MailLater,
     Menu,
     Nick,
+    Photo,
+    Pictured,
     Reader,
     ReplyTo,
     Schema,
@@ -367,6 +371,48 @@ describe('the placeholder transform, rendered for several users', () => {
             'H3:Total {m0o}{m0c} items',
             'H4:{user_name} sent {name}',
         ]);
+    }, 60_000);
+
+    // A block's tokens include the attributes a translator reads: a value there is a placeholder
+    // too, and each page shows its own. A value alone in an attribute fills it as a value fills text.
+    it('a value in an attribute a translator reads registers once, with its placeholder, and each page shows its own', async () => {
+        const markup = async (node: ReactNode) => {
+            const host = document.createElement('div');
+            document.body.appendChild(host);
+            const root = createRoot(host);
+            await act(async () => root.render(node));
+            // The host's markers (its id, and whether a catalog served it) are the core's.
+            const out = host.innerHTML.replace(/ data-ls-(contentblock|resolved)="[^"]*"/g, '');
+            await sleep(500);
+            await act(async () => root.unmount());
+            host.remove();
+            return out;
+        };
+        const shown: string[] = [];
+        for (const name of ['Ana', 'Bo']) shown.push(await markup(el(Photo, { user: { name } })));
+        for (const user of [{ name: 'Ana', id: 1 }, { name: 'Bo', id: 2 }, { id: 3 }]) shown.push(await markup(el(Avatar, { user })));
+        for (const name of ['Ana', 'Bo']) shown.push(await markup(el(Format, { x: { name } })));
+        shown.push(await markup(el(Pictured, { x: ['ana', 'bo'] })));
+        await sleep(1500);
+        expect(shown).toEqual([
+            '<translate><img alt="Photo of Ana" src="/p.png"> Hi Ana</translate>',
+            '<translate><img alt="Photo of Bo" src="/p.png"> Hi Bo</translate>',
+            '<translate><img alt="Ana" src="/a.png"><p title="Profile of 1">Profile</p></translate>',
+            '<translate><img alt="Bo" src="/a.png"><p title="Profile of 2">Profile</p></translate>',
+            '<translate><img alt="" src="/a.png"><p title="Profile of 3">Profile</p></translate>',
+            // A `%` and a name just before a value is text: the value fills its own placeholder.
+            '<translate><p title="%sAna">Hi</p> Use %sAna</translate>',
+            '<translate><p title="%sBo">Hi</p> Use %sBo</translate>',
+            // A list is written into an attribute as JavaScript writes it, whole or in the text.
+            '<translate><img data-tooltip="ana,bo" title="Pic ana,bo" src="/x.png"> Gallery</translate>',
+        ]);
+        expect((await stored()).filter((x) => /^(AT|AV|PS|PX):/.test(x))).toEqual([
+            'AT:BLOCK[Photo of {name}|Hi {name}]',
+            'AV:BLOCK[{name}|Profile of {id}|Profile]',
+            'PS:BLOCK[%s{name}|Hi|Use %s{name}]',
+            'PX:BLOCK[Pic {x}|Gallery]',
+        ]);
+        expect(JSON.stringify((await fx.state()).projects.p1)).not.toMatch(/Ana|Bo"|Profile of \d/);
     }, 60_000);
 
     it('a marked value in a <Phrase> shows its new value when it changes', async () => {

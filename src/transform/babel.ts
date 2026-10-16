@@ -36,6 +36,25 @@
  *   <Translate>Signed in as <DontTranslate>{user.email}</DontTranslate></Translate>
  *     → <Translate>Signed in as <DontTranslate><span data-ls-param="email">{user.email}</span></DontTranslate></Translate>
  *
+ * A block's tokens begin with each element's attributes a translator reads (TOK-3: the core's
+ * `TRANSLATABLE_ATTRIBUTES`, and the value of a button or a submit or button input), so in a
+ * `<Translate>` a value in one is a placeholder too. A value only in attributes' text travels as the
+ * string JavaScript writes there; one that is the whole attribute, or also in the content, travels
+ * as given and fills its placeholder as a value fills text, and one React renders as nodes (a list,
+ * an object) is put back as a whole prop and fills an attribute's text as JavaScript writes it into a
+ * string (`withNodeParams`). On an element whose opt-out or input type is
+ * an expression, which only the page decides, the value is left as written and the `<Translate>`
+ * gets `data-ls-unnamed`. A `<Phrase>` keys none of its elements' attributes, so they are left as
+ * written there.
+ *
+ *   <Translate><img alt={`Photo of ${user.name}`} /> Hi {user.name}</Translate>
+ *     → <Translate params={{ name: user.name }}><img alt={"Photo of %name%"} /> Hi %name%</Translate>
+ *
+ * The core reads `%name%` left to right, so where the text before a value ends in a `%` and a name
+ * it has not closed (`%s{x}`), the placeholder's own `%` would close it; there the placeholder is
+ * written in the stored form, `{name}`, which the core reads the same way (`%s{x}`). The text is read
+ * as the core registers it (C0 control characters dropped) and as it renders it (kept).
+ *
  * Only `<Translate>` and `<Phrase>` imported from `langsys-js-react` are rewritten, and only the
  * children a host element, a fragment or `<DontTranslate>` renders as text: an expression inside a
  * nested host element (`<b>{x}</b>`) is included; one that is itself JSX or holds JSX
@@ -55,14 +74,15 @@
  * binding), so another function named `t` is left alone. A `+` chain joins as JavaScript joins it:
  * a sum before the first string, or in parentheses, is one value. A key built in the call (its own
  * text has no space: `errors.${code}`, `status_${status}`) is left as it is, since legacy-key mode
- * looks it up as built. A name the developer wrote (`%name%` anywhere in a unit, `{name}` in a `t()`
- * text whose call passes params) is never given to a value. Names follow VAR-2 (`./naming`); an expression
+ * looks it up as built. A name the developer wrote (`%name%` anywhere in a unit, a key of a params
+ * literal, `{name}` in a `t()` text whose params the build cannot read into: a variable, a spread)
+ * is never given to a value. Names follow VAR-2 (`./naming`); an expression
  * no name can be derived from is named `value`, `value_2`, … and reported in
  * `file.metadata.langsys.warnings`, which the Vite plugin and the Next loader surface as build
  * warnings.
  */
 import type { NodePath, PluginObj, PluginPass, types as t } from '@babel/core';
-import { NON_TRANSLATABLE_ELEMENTS } from 'langsys-js-typescript/pure';
+import { NON_TRANSLATABLE_ELEMENTS, TRANSLATABLE_ATTRIBUTES, stripC0Controls } from 'langsys-js-typescript/pure';
 import { nameAll, type Named } from './naming.js';
 
 const SOURCE = 'langsys-js-react';
@@ -72,6 +92,12 @@ const VERBATIM = 'DontTranslate';
 const RAW_TEXT = new Set(['script', 'style']);
 /** Elements that hold text only, where a marker element is not drawn or not allowed. */
 const TEXT_ONLY = new Set(['textarea', 'title', 'option']);
+/**
+ * A button's value, and a submit or button input's, is a label the core reads as text: its
+ * VALUE_TRANSLATABLE_ELEMENTS and VALUE_TRANSLATABLE_INPUT_TYPES, which no entry exports.
+ */
+const VALUE_ELEMENTS = new Set(['button']);
+const VALUE_INPUT_TYPES = new Set(['submit', 'button']);
 
 /**
  * How a value is written where it stands: `text` in translated text, replaced by `%name%` and a
@@ -171,6 +197,23 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             }
         }
         return unknown ? 'unknown' : null;
+    };
+
+    /**
+     * Whether the core reads an attribute as text to translate: one of its `TRANSLATABLE_ATTRIBUTES`,
+     * or the value of a button or of a submit or button input; `undefined` when an expression
+     * decides the input's type.
+     */
+    const readsAsText = (tag: string, opening: t.JSXOpeningElement, name: string): boolean | undefined => {
+        if ((TRANSLATABLE_ATTRIBUTES as readonly string[]).includes(name)) return true;
+        if (name !== 'value') return false;
+        if (VALUE_ELEMENTS.has(tag)) return true;
+        if (tag !== 'input') return false;
+        let type: string | undefined = '';
+        for (const a of opening.attributes) {
+            if (a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'type') type = attributeText(a);
+        }
+        return type === undefined ? undefined : VALUE_INPUT_TYPES.has(type.toLowerCase());
     };
 
     /** `children`, or `x.children`, under any TypeScript cast or assertion: the content a wrapper is given. */
@@ -291,6 +334,18 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
      * JSX gives a meaning to as entities, or a string literal where a line break, a tab or a line or
      * paragraph separator would be trimmed or read differently by another compiler.
      */
+    /**
+     * A placeholder as the core reads it after `before`: `%name%`, unless `before` ends in a `%` and a
+     * name the core has not closed, which the placeholder's own `%` would close (`%s` then `%x%` reads
+     * as `%s%`); there it is written in the stored form, `{name}`, which the core reads the same way.
+     * The core reads a unit's text as it registers it, with C0 control characters dropped, and as it
+     * renders it, with them kept, so `{name}` is written where either reading would close an open name.
+     */
+    const placeholderAfter = (before: string, name: string): string => {
+        const open = (text: string) => /%[A-Za-z_][A-Za-z0-9_]*$/.test(text.replace(EXPLICIT, '\0'));
+        return open(before) || open(stripC0Controls(before)) ? `{${name}}` : `%${name}%`;
+    };
+
     const textNode = (value: string): t.JSXText | t.JSXExpressionContainer => {
         if (/[\r\n\t\u2028\u2029]/.test(value)) return T.jsxExpressionContainer(T.stringLiteral(value));
         const node = T.jsxText(value);
@@ -327,6 +382,8 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             param: boolean;
             /** Text in translated text where no marker element can stand. */
             bare: boolean;
+            /** In an attribute's text, the value as JavaScript writes it into the string. */
+            text?: t.Expression;
             replace: (name: string) => void;
         }> = [];
         const tag = path.node.openingElement.name;
@@ -339,6 +396,8 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
         let markAll = false;
         /** Text this transform wrote (a literal, a placeholder), which React shows as it is. */
         const asWritten = new WeakSet<t.JSXText>();
+        /** The placeholders it wrote, by name: settled into their run's text as the core reads them there. */
+        const placeholderNames = new WeakMap<t.JSXText, string>();
         const written = (value: string): t.JSXText => {
             const node = T.jsxText(value);
             asWritten.add(node);
@@ -356,7 +415,10 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             const out: t.JSXElement['children'] = [];
             let run = '';
             for (const c of children) {
-                if (c.type === 'JSXText') run += asWritten.has(c) ? c.value : asRendered(c);
+                if (c.type === 'JSXText') {
+                    const name = placeholderNames.get(c);
+                    run += name !== undefined ? placeholderAfter(run, name) : asWritten.has(c) ? c.value : asRendered(c);
+                }
                 else if (c.type === 'JSXExpressionContainer' && c.expression.type === 'JSXEmptyExpression') continue;
                 else {
                     if (run) out.push(textNode(run));
@@ -410,6 +472,56 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             return true;
         };
 
+        /**
+         * A block's tokens begin with each element's attributes a translator reads (TOK-3), so a
+         * value in one is a placeholder, as in the text, and a value in its text travels as
+         * JavaScript writes it there. A phrase keys none of its elements' attributes. Under an
+         * opt-out only the page knows, or on an input whose type only the page knows, the value is
+         * left as written and the block, which might key it, registers nothing.
+         */
+        const attributes = (opening: t.JSXOpeningElement, tag: string, mode: Mode) => {
+            if (mode === 'shown') return;
+            for (const a of opening.attributes) {
+                if (a.type !== 'JSXAttribute' || a.name.type !== 'JSXIdentifier' || a.value?.type !== 'JSXExpressionContainer') continue;
+                const e = a.value.expression;
+                if (e.type === 'JSXEmptyExpression' || literalOf(e) !== undefined) continue;
+                if (e.type === 'LogicalExpression' || e.type === 'ConditionalExpression' || holdsJsx(e)) continue;
+                const reads = readsAsText(tag, opening, a.name.name);
+                if (reads === false) continue;
+                if (reads === undefined || mode === 'unknown') {
+                    unnamed = true;
+                    continue;
+                }
+                const parts = pieces(e) ?? [e];
+                const inTemplate = new WeakSet<t.Node>();
+                T.traverseFast(e, (n) => {
+                    if (n.type === 'TemplateLiteral') n.expressions.forEach((x) => inTemplate.add(x));
+                });
+                const names: string[] = [];
+                const attr = a;
+                parts.forEach((p, k) => {
+                    if (typeof p === 'string') return;
+                    found.push({
+                        source: sourceOf(state, p),
+                        expression: p,
+                        param: true,
+                        bare: false,
+                        text:
+                            p === e
+                                ? undefined
+                                : inTemplate.has(p)
+                                  ? T.templateLiteral([T.templateElement({ raw: '' }), T.templateElement({ raw: '' }, true)], [p])
+                                  : T.binaryExpression('+', T.stringLiteral(''), p),
+                        replace: (name) => {
+                            names[k] = name;
+                            const value = parts.reduce<string>((out, q, j) => out + (typeof q === 'string' ? q : placeholderAfter(out, names[j] ?? '')), '');
+                            attr.value = T.jsxExpressionContainer(T.stringLiteral(value));
+                        },
+                    });
+                });
+            }
+        };
+
         const walk = (children: t.JSXElement['children'], where: Where) => {
             unwrap(children);
             children.forEach((c, i) => {
@@ -451,7 +563,13 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
                         param: where.mode !== 'shown',
                         bare: where.mode === 'text' && where.markerless,
                         replace: (name) => {
-                            children[i] = where.mode === 'text' && !markAll ? written(`%${name}%`) : marker(name, e);
+                            if (where.mode !== 'text' || markAll) {
+                                children[i] = marker(name, e);
+                                return;
+                            }
+                            const text = written(`%${name}%`);
+                            placeholderNames.set(text, name);
+                            children[i] = text;
                         },
                     });
                 } else if (c.type === 'JSXElement') {
@@ -492,6 +610,7 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
                                 : where.foreign === 'svg' && n.name === 'foreignObject'
                                   ? null
                                   : where.foreign;
+                        if (!isPhrase) attributes(c.openingElement, n.name, mode);
                         walk(c.children, { mode, foreign, markerless: foreign !== null || TEXT_ONLY.has(n.name) });
                     } else if (state.verbatim.has(n.name)) walk(c.children, { ...where, mode: 'shown' });
                 }
@@ -528,7 +647,13 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
         placeholders(named).forEach((n) => warn(state, n));
         // A marked value carries itself; a replaced one, or one under an opt-out only the page
         // knows, travels as a param.
-        const params = placeholders(named.filter((_, i) => found[i].param));
+        const params = placeholders(named.filter((_, i) => found[i].param)).map((n) => {
+            // A value only in attributes' text travels as JavaScript writes it there; one that is
+            // also content, or a whole attribute, travels as given.
+            const uses = found.filter((f, i) => f.param && named[i].name === n.name);
+            const given = uses.find((f) => !f.text);
+            return { ...n, expression: given ? given.expression : uses[0].text! };
+        });
         touched.forEach(settle);
 
         if (params.length) {
@@ -589,9 +714,14 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
             .filter((p): p is t.Expression => typeof p !== 'string')
             .map((e) => ({ source: sourceOf(state, e), expression: e }));
         const paramsExpr = (params as t.Expression | undefined) ?? null;
-        // A `{name}` the text writes is the developer's when the call passes params that can fill it;
-        // with none, it can only be the value's own (an ICU argument on it, `{count, plural, …}`).
-        const written = paramsExpr ? parts.filter((p): p is string => typeof p === 'string') : [];
+        // A `{name}` the text writes is the developer's when the call passes params that can fill it.
+        // A params literal names each key it passes (taken below), so only params the build cannot
+        // read into (a variable, a spread, a computed key) may hold any name; otherwise a written
+        // `{name}` can only be the value's own (an ICU argument on it, `{count, plural, …}`).
+        const unread =
+            !!paramsExpr &&
+            (paramsExpr.type !== 'ObjectExpression' || paramsExpr.properties.some((p) => p.type !== 'ObjectProperty' || p.computed));
+        const written = unread ? parts.filter((p): p is string => typeof p === 'string') : [];
         const named = nameAll(values, explicitNames(written, paramsExpr, BRACED));
         let next = 0;
         const text = parts.map((p) => (typeof p === 'string' ? p : `{${named[next++].name}}`)).join('');
