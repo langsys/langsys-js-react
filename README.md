@@ -145,14 +145,18 @@ Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, v
 
 #### Plurals and gender: write the sentence flat
 
-**Never write ICU.** Write the sentence flat, with the count as a placeholder, and Langsys makes each language's plural and gender forms, the base language included:
+**Never write ICU.** Write the sentence flat, with the count as a placeholder, and Langsys makes each language's plural forms, the base language included:
 
 ```tsx
 t('You have {count} new messages', 'Inbox', { count });                                   // ✅
 t('{count, plural, one {# new message} other {# new messages}}', 'Inbox', { count });      // ❌ ICU by hand
 ```
 
-The base SDK asks the API for those forms on every request (`X-Langsys-Capabilities: icu`) and `t()` renders them with full CLDR plural rules for the active locale, Arabic's six categories and Russian's four. Until a phrase's base-language check has run, the base language shows the sentence as written. A sentence that says something different at zero is its own phrase, chosen in code.
+The base SDK asks the API for those forms on every request (`X-Langsys-Capabilities: icu`) and `t()` renders them with full CLDR plural rules for the loaded catalog's locale, Arabic's six categories and Russian's four. Until a phrase's base-language check has run, the base language shows the sentence as written. A sentence that says something different at zero is its own phrase, chosen in code.
+
+Langsys can also generate gender forms for a placeholder like `{name}` in gendered target languages, but on this version there is no way to tell `t()` which one to use. The generated argument (`{name_gender, select, …}`) is not in the phrase you wrote, so `t()`'s typed params don't accept it, and the sentence renders its neutral `other` form. That is a correct sentence, just not a gendered one.
+
+The same rule covers formatting. Don't write `{n, number}`, `{d, date}` or `{t, time}`: a plain `{n}` already formats numbers and dates (above). For a time of day, pass a string you formatted yourself.
 
 #### Categorization disambiguates context
 
@@ -214,7 +218,7 @@ The component:
 
 > **Use `%key%` in `<Translate>`/`<Phrase>` markup, not bare `{key}`.** In JSX a literal `{count}` is a JavaScript expression that React evaluates *before* the SDK's DOM walker sees the text — the braces vanish and interpolation silently breaks (it still looks fine in the base locale, which hides it). Worse than breaking: the evaluated value is captured *as part of the phrase*, so every distinct value hashes to its own content block. `%count%` passes through JSX as plain text; the SDK normalizes it to canonical `{count}` at capture, so **translators and the catalog only ever see `{count}`**, and both spellings hash to the same content-block id. Keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left untouched. An unknown `%key%` with no matching param renders as `{key}` — matching `t()`'s behavior for unknown keys. (`t()` and the hooks keep `{key}`: JS strings reach the SDK literally, so there's no collision.)
 
-> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production, treats ICU slots as legitimate, and only re-warns when the set of param keys changes.
+> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production and only re-warns when the set of param keys changes.
 
 Why that second consequence is the expensive one — measured against the shipped tokenizer (`tokenizeElement` + `generateCustomId`):
 

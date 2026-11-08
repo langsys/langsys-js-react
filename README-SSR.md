@@ -154,7 +154,7 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
 }
 ```
 
-Measured on Next 16, production build, `langsys-js-react@0.6.7`: `curl` of a localized route returns genuinely translated body copy, with the plural forms Langsys generated rendered correctly (`interpolate` is the SDK's own pure helper), and 8 locales × 10 rounds fired concurrently gave 80/80 correct — every response checked against its own expected locale.
+Measured on Next 16, production build, `langsys-js-react@0.6.7`: `curl` of a localized route returns genuinely translated body copy, with the catalog's plural forms rendered correctly (`interpolate` is the SDK's own pure helper), and 8 locales × 10 rounds fired concurrently gave 80/80 correct — every response checked against its own expected locale.
 
 It is concurrency-safe **by construction** — the catalog is an argument, so there is no shared state to race and no module graph to be on the wrong side of.
 
