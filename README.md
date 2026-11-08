@@ -143,7 +143,16 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 
 Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
 
-> Future versions will swap the simple `{name}` runtime for full ICU MessageFormat — adding plural / select — without changing the public signature. Style-less ICU arguments (`{n, number}`, `{d, date}`, `{t, time}`) already format as of base SDK 0.3.0. Today's `t('{count} items', 'Cart', { count })` will evolve to `t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
+#### Plurals and gender: write the sentence flat
+
+**Never write ICU.** Write the sentence flat, with the count as a placeholder, and Langsys makes each language's plural and gender forms, the base language included:
+
+```tsx
+t('You have {count} new messages', 'Inbox', { count });                                   // ✅
+t('{count, plural, one {# new message} other {# new messages}}', 'Inbox', { count });      // ❌ ICU by hand
+```
+
+The base SDK asks the API for those forms on every request (`X-Langsys-Capabilities: icu`) and `t()` renders them with full CLDR plural rules for the active locale, Arabic's six categories and Russian's four. Until a phrase's base-language check has run, the base language shows the sentence as written. A sentence that says something different at zero is its own phrase, chosen in code.
 
 #### Categorization disambiguates context
 
