@@ -191,7 +191,9 @@ t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
 
 - **It moves every use.** Langsys keeps one item per text and category, so a move retires the old item for every call that registers that text in that category. Move them all in one release.
 - **Nothing to clean up on a schedule.** The previous category is sent once, on the registration the new code triggers. Once the catalog has the content under its new category, the option does nothing and you can delete it whenever convenient.
-- **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host carries `data-ls-previous-category` (a phrase) or `data-ls-previous-contentblock` (a block) so hydration renders the same text.
+- **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host says where the text came from, `data-ls-previous-contentblock` when it was filled from the old category's block and `data-ls-previous-category` when it was filled from the old category's phrase, so hydration renders the same text.
+- **A block with its own `custom_id` moves in place.** Its id names it whatever its category, so the API moves the block itself, and an older release still registering it under the old category moves it back. Move every use in one release.
+- **On a server entry** (`langsys-js-react/server`), import `inCategory` from `langsys-js-typescript`.
 - **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
 - **Needs the base SDK release that carries the move** (after 0.7.2).
 
