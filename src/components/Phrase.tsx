@@ -23,6 +23,15 @@ export interface PhraseProps {
     /** Category the phrase registers under (disambiguation for translators). */
     category?: string;
     /**
+     * The category this content was registered under before it moved to `category` (MOVE-1):
+     * `''` for none, absent for no move. Its translations follow it instead of being made, and
+     * charged for, again; until the catalog holds it under `category`, the previous category's
+     * entry renders and the host says so (MOVE-4, MOVE-5). Never part of its identity (MOVE-2),
+     * and sent only on the registration a miss triggers (MOVE-3), so once the catalog has it the
+     * prop does nothing and can be deleted whenever convenient.
+     */
+    previousCategory?: string | null;
+    /**
      * Interpolation params. Write placeholders as `%n%` / `%name%` in the markup.
      * A bare `{n}` in JSX is an expression React evaluates before the SDK sees the
      * text, so the *value* lands in the captured phrase and each distinct value
@@ -76,6 +85,7 @@ export interface PhraseProps {
  */
 export function Phrase({
     category = '',
+    previousCategory,
     params: given = {},
     tag = 'span',
     className,
@@ -98,7 +108,8 @@ export function Phrase({
     // renders. One inside a subtree that is not translated is not read: the phrase keys that
     // subtree as one empty pair (TOK-1).
     const unnamedValues = unmarked !== undefined || hasRuntimeValues(children, true);
-    const options = { category, params, ...(unnamedValues ? { register: false } : {}) };
+    const moved = previousCategory === undefined || previousCategory === null ? {} : { previousCategory };
+    const options = { category, ...moved, params, ...(unnamedValues ? { register: false } : {}) };
     // Under a <LangsysProvider>, the server and hydration renders read the request's scope.
     const inSeedScope = useSeedScopeRunner();
     const rendered = unit ? inSeedScope(() => renderBlock(unit, options)) : null;
@@ -135,6 +146,7 @@ export function Phrase({
         if (unnamedValues) warnUnnamed(unmarked !== undefined);
         const instance = new VanillaPhrase(host, {
             category,
+            ...moved,
             params,
             ...(unnamedValues ? { register: false } : {}),
         });
@@ -144,7 +156,7 @@ export function Phrase({
             instanceRef.current = undefined;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapped.ok, category]);
+    }, [mapped.ok, category, previousCategory]);
 
     useEffect(() => {
         instanceRef.current?.setParams(params);

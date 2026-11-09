@@ -22,6 +22,15 @@ import { useSeedScopeRunner } from './LangsysProvider.js';
 export interface TranslateProps {
     /** Optional category under which tokens are registered. Helps translators disambiguate. */
     category?: string;
+    /**
+     * The category this content was registered under before it moved to `category` (MOVE-1):
+     * `''` for none, absent for no move. Its translations follow it instead of being made, and
+     * charged for, again; until the catalog holds it under `category`, the previous category's
+     * entry renders and the host says so (MOVE-4, MOVE-5). Never part of its identity (MOVE-2),
+     * and sent only on the registration a miss triggers (MOVE-3), so once the catalog has it the
+     * prop does nothing and can be deleted whenever convenient.
+     */
+    previousCategory?: string | null;
     /** Optional stable id for the content block. If omitted, the SDK hashes category + tokens. */
     custom_id?: string;
     /** Optional human-readable label shown in the Translation Manager. */
@@ -72,6 +81,7 @@ export interface TranslateProps {
  */
 export function Translate({
     category = '',
+    previousCategory,
     custom_id = '',
     label = '',
     params: given,
@@ -93,6 +103,7 @@ export function Translate({
     const unnamedValues = unmarked !== undefined || hasRuntimeValues(children);
     const options: BlockOptions = {
         category,
+        ...(previousCategory === undefined || previousCategory === null ? {} : { previousCategory }),
         params,
         label,
         ...(custom_id ? { id: custom_id } : {}),
@@ -137,6 +148,7 @@ export function Translate({
         if (unnamedValues) warnUnnamed(unmarked !== undefined);
         const instance = new VanillaTranslate(host, {
             category,
+            ...(previousCategory === undefined || previousCategory === null ? {} : { previousCategory }),
             custom_id,
             label,
             params,
@@ -148,7 +160,7 @@ export function Translate({
             instanceRef.current = undefined;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapped.ok, category, custom_id, label]);
+    }, [mapped.ok, category, previousCategory, custom_id, label]);
 
     useEffect(() => {
         instanceRef.current?.setParams(params);

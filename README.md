@@ -171,6 +171,30 @@ Without categorization, "Home" would only have one translation — which can't w
 
 A good rule for category names: the module or feature the phrase lives in (`Account`, `Errors`, `Checkout`, `UI`).
 
+#### Moving content to another category
+
+The category is part of what identifies a phrase or block, so changing it registers the content as new, and it would be translated, and charged for, again. Name the category it was in before, and its translations follow it instead:
+
+```tsx
+import { inCategory, Phrase, Translate } from 'langsys-js-react';
+
+t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
+
+<Phrase category="Checkout" previousCategory="Header">Buy <b>now</b></Phrase>
+
+<Translate category="Checkout" previousCategory="Header">
+    <p>Free shipping on every order.</p>
+</Translate>
+```
+
+`t()`'s second argument is a category when it's a string and params when it's an object, so a move goes in the category position, wrapped by `inCategory()`. Use `previousCategory: ''` if the content had no category before.
+
+- **It moves every use.** Langsys keeps one item per text and category, so a move retires the old item for every call that registers that text in that category. Move them all in one release.
+- **Nothing to clean up on a schedule.** The previous category is sent once, on the registration the new code triggers. Once the catalog has the content under its new category, the option does nothing and you can delete it whenever convenient.
+- **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host carries `data-ls-previous-category` (a phrase) or `data-ls-previous-contentblock` (a block) so hydration renders the same text.
+- **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
+- **Needs the base SDK release that carries the move** (after 0.7.2).
+
 ### `<Translate>` — HTML content blocks
 
 For larger blocks of HTML where the structure should be preserved for the translator:

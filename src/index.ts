@@ -123,6 +123,13 @@ export { canonicalizeLocale } from 'langsys-js-typescript';
 // a consumer importing it directly breaks under pnpm / Yarn PnP.
 export { interpolate } from 'langsys-js-typescript';
 
+// Content moved to another category (MOVE-1), re-exported by reference so the brand the core
+// checks is the core's own: `t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))`.
+// The ref goes in `t()`'s category position; `<Translate>` and `<Phrase>` take `previousCategory`
+// as a prop instead.
+export { inCategory, isCategoryRef } from 'langsys-js-typescript';
+export type { CategoryRef, CategoryMoveOptions } from 'langsys-js-typescript';
+
 // API client (vanilla — no React concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
