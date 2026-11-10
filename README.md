@@ -141,7 +141,7 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
+Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Before passing a `Date`, or a number that isn't a plural count, read the formatting note under [Plurals and gender](#plurals-and-gender-write-the-sentence-flat): on this version they break inside a plural or gender form. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
 
 #### Plurals and gender: write the sentence flat
 
@@ -154,9 +154,22 @@ t('{count, plural, one {# new message} other {# new messages}}', 'Inbox', { coun
 
 The base SDK asks the API for those forms on every request (`X-Langsys-Capabilities: icu`) and `t()` renders them with full CLDR plural rules for the loaded catalog's locale, Arabic's six categories and Russian's four. Until a phrase's base-language check has run, the base language shows the sentence as written. A sentence that says something different at zero is its own phrase, chosen in code.
 
-Langsys can also generate gender forms for a placeholder like `{name}` in gendered target languages, but on this version there is no way to tell `t()` which one to use. The generated argument (`{name_gender, select, …}`) is not in the phrase you wrote, so `t()`'s typed params don't accept it, and the sentence renders its neutral `other` form. That is a correct sentence, just not a gendered one.
+Langsys can also generate gender forms for a placeholder like `{name}` in gendered target languages: the translation grows a `{name_gender, select, …}` argument. To choose the form, pass `name_gender` (`'female'`, `'male'` or `'other'`) next to `name`. `t()`'s typed params reject it in an object literal, because it isn't in the phrase you wrote, so build the params object first. `<Phrase params>` and `<Translate params>` take it as it is. Without it the sentence renders its neutral `other` form.
 
-The same rule covers formatting. Don't write `{n, number}`, `{d, date}` or `{t, time}`: a plain `{n}` already formats numbers and dates (above). For a time of day, pass a string you formatted yourself.
+```tsx
+const params = { name, name_gender: 'female' };
+t('{name} has been invited', 'Team', params);   // es: "Ana ha sido invitada"
+```
+
+In debug mode `<Phrase>` and `<Translate>` warn that `name_gender` matches no placeholder and tell you to write `%name_gender%`. Ignore that advice: it would print the gender into the sentence.
+
+The same rule covers formatting: don't write `{n, number}`, `{d, date}` or `{t, time}`. A plain `{n}` formats numbers and dates (above), but on this version only while the translation has no plural or gender form in it, and any translation can gain one. Inside one, a `Date` breaks the render: `t()` returns an array, which React refuses as a child ("Objects are not valid as a React child"), and `<Phrase>`/`<Translate>` print the date's `toString()`. A number other than the count renders unformatted (`1234.5`, not `1.234,5`). So pass dates, times and every number except the count as strings you formatted with the loaded locale:
+
+```tsx
+const locale = useCurrentLocale() || 'en';   // '' until the first catalog loads, and Intl throws on ''
+const due = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+t('Due {due}, {count} items', 'Orders', { due, count });
+```
 
 #### Categorization disambiguates context
 
