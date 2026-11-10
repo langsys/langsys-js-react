@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000400-0001-4000-8000-000000000000",
+            "title": "react mig-passthrough base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "131501|218c8e56baa4fb71e50d3522ff4344e7385ccfa7",
+                "device_id": "react-mig-passthrough-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000401-0001-4000-8000-000000000000",
+            "key": "react-mig-passthrough-1-k-writer",
+            "project": "78000400-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000700-0001-4000-8000-000000000000",
+            "title": "react var7-unregistered base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "133001|56345589c81fbd2baa8a9f822f3c789645802d94",
+                "device_id": "react-var7-unregistered-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000701-0001-4000-8000-000000000000",
+            "key": "react-var7-unregistered-1-k-writer",
+            "project": "78000700-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

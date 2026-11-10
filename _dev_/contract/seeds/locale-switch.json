@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000300-0001-4000-8000-000000000000",
+            "title": "react locale-switch base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "131001|460273584208fe52ae155591d984f894efc1b90b",
+                "device_id": "react-locale-switch-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000301-0001-4000-8000-000000000000",
+            "key": "react-locale-switch-1-k-writer",
+            "project": "78000300-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000800-0001-4000-8000-000000000000",
+            "title": "react transform base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "133501|30a09b9fda98ecb9353f18114da8ff37ddf9a6ad",
+                "device_id": "react-transform-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000801-0001-4000-8000-000000000000",
+            "key": "react-transform-1-k-writer",
+            "project": "78000800-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

@@ -5,29 +5,30 @@ import { act, createElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LangsysApp, Phrase, Translate, createLocaleStore, useT } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
+import { everyText } from './test-helpers/contract-held.js';
+import seeds from './test-helpers/contract-seeds/gate10.js';
+import type { World } from './test-helpers/contract-worlds.js';
 
 /**
- * GATE-10 through this binding's components, against the contract double (tier `contract`).
+ * GATE-10 through this binding's components, against the API on an SDK test clone (tier
+ * `contract`, spec CONF-2). Every assertion reads what the API accepted, as the catalog serves it
+ * to the project's key, never what the SDK sent.
  *
  * Text inside a `data-ls-resolved` subtree is already translated output, not source, so no
  * miss is recorded for it. The core decides that by walking up from the host element it is
  * given; this binding's part is to hand `<Translate>` and `<Phrase>` hosts that live in the
  * real document, so an ancestor marker set by the app's layout is reachable.
  *
- * The session may write, so the double stores anything the SDK registers. Every absence is
+ * The session may write, so the API stores anything the SDK registers. Every absence is
  * asserted only after an unmarked control from the same render has been stored.
  */
 
 let fx: ContractFixture;
-const SEED = {
-    projects: [{ id: 'p1', base_locale: 'en', target_locales: ['es-es'], website_url: 'https://site.local' }],
-    keys: [{ key: 'k-writer', project: 'p1', type: 'write' }],
-};
+let w: World;
 
-/** Every source string the double has accepted, from phrases and from content blocks. */
+/** Every source string the API holds for the project, from phrases and from content blocks. */
 async function accepted(): Promise<string[]> {
-    const p = (await fx.state()).projects.p1;
-    return [...p.phrases.map((x) => x.phrase), ...p.blocks.flatMap((b) => b.phrases.map((x) => x.phrase))];
+    return everyText(await fx.held(w.key('k-writer'), w.project(), 'es-es'));
 }
 const has = async (needle: string) => (await accepted()).some((s) => s.includes(needle));
 
@@ -46,13 +47,14 @@ const el = createElement;
 
 beforeAll(async () => {
     fx = await startContractFixture();
-    await fx.seed(SEED);
+    w = seeds.take('base');
+    await fx.use(w);
     for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error'] as const) {
         vi.spyOn(console, m).mockImplementation(() => {});
     }
     await LangsysApp.init({
-        projectid: 'p1',
-        key: 'k-writer',
+        projectid: w.project(),
+        key: w.key('k-writer'),
         UserLocaleStore: createLocaleStore('es-es'),
         baseLocale: 'en',
         apiUrl: fx.baseUrl,
@@ -79,7 +81,7 @@ describe('GATE-10 — a resolved subtree records no miss, read through this bind
         );
         await until(() => has('Block control one'));
         await until(() => has('Block optout one'));
-        await sleep(900);
+        await sleep(2000);
         for (const word of ['resolved', 'legacyspelling', 'bare', 'inherited']) {
             expect(await has(`Block ${word}`), word).toBe(false);
         }
@@ -94,7 +96,7 @@ describe('GATE-10 — a resolved subtree records no miss, read through this bind
             ),
         );
         await until(() => has('Single control'));
-        await sleep(900);
+        await sleep(2000);
         expect(await has('Single resolved')).toBe(false);
         await done();
     });
@@ -108,7 +110,7 @@ describe('GATE-10 — a resolved subtree records no miss, read through this bind
         );
         // Inline markup is stored as neutral tokens, so the control is `Phrase {m0o}control{m0c} text`.
         await until(async () => (await accepted()).includes('Phrase {m0o}control{m0c} text'));
-        await sleep(900);
+        await sleep(2000);
         expect(await accepted()).not.toContain('Phrase {m0o}resolved{m0c} text');
         await done();
     });
@@ -127,7 +129,7 @@ describe('GATE-10 — a resolved subtree records no miss, read through this bind
             ),
         );
         await until(async () => (await accepted()).includes('Bare t under resolved'));
-        await sleep(900);
+        await sleep(2000);
         expect(await has('Sibling block under resolved')).toBe(false);
         await done();
     });

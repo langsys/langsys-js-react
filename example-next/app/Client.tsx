@@ -15,9 +15,9 @@ export function Client({ locale }: { locale: string }) {
     const [user] = useState({ firstName: 'Ana' });
 
     useEffect(() => {
-        const key = new URLSearchParams(window.location.search).get('key') === 'public' ? 'k-public' : 'k-writer';
+        const key = new URLSearchParams(window.location.search).get('key') === 'public' ? process.env.LANGSYS_PLAYGROUND_PUBLIC! : process.env.LANGSYS_PLAYGROUND_WRITER!;
         void LangsysApp.init({
-            projectid: 'p1',
+            projectid: process.env.LANGSYS_PLAYGROUND_PROJECT!,
             key,
             UserLocaleStore: store,
             baseLocale: 'en',

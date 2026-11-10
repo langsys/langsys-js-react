@@ -1,0 +1,245 @@
+// @vitest-environment jsdom
+// @vitest-environment-options {"url":"https://site.local/page"}
+/**
+ * SRV-5, the clause about what the SDK sends: a block is sent once, however blocks nest, and never
+ * keyed on a placeholder.
+ *
+ * A `<Translate>` whose children hold a component falls back to the core's DOM class, and that
+ * class's walk takes over a marked host nested inside it that nothing claims (MARK-2). A
+ * tree-rendered `<Translate>` or `<Phrase>` under such an ancestor registers itself through
+ * `registerBlock` with its host, which claims the host, so the walk leaves it alone: the block is
+ * sent once, under its own params. Measured at the transport seam, every item the SDK posts, with
+ * no server: an API stores a duplicate once, so no answer of its can show a block sent twice. What
+ * the API accepted for the same trees (each block under its own id and phrases, the placeholders
+ * and never a value) is read back in `nested-fallback.contract.test.tsx`.
+ */
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
+import { sleep, until as untilPolling } from './test-helpers/contract-fixture.js';
+import { STUB_API_URL, stubApi, type StubbedApi } from './test-helpers/stub-api.js';
+
+/** Nothing here reads an API, so it polls fast. */
+const until = (check: () => boolean | Promise<boolean>, timeoutMs = 8000) => untilPolling(check, timeoutMs, 25);
+
+let api: StubbedApi;
+const consoleSpies: MockInstance[] = [];
+
+function Badge() {
+    return el('span', null, 'New');
+}
+
+async function render(tree: ReactNode) {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => root.render(tree));
+    return async () => {
+        await act(async () => root.unmount());
+        host.remove();
+    };
+}
+
+beforeAll(async () => {
+    for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error', 'debug'] as const) {
+        consoleSpies.push(vi.spyOn(console, m).mockImplementation(() => {}));
+    }
+    api = stubApi();
+    await LangsysApp.init({
+        projectid: 'stub-project',
+        key: 'stub-key',
+        UserLocaleStore: createLocaleStore('en'),
+        baseLocale: 'en',
+        apiUrl: STUB_API_URL,
+        debug: true,
+    } as never);
+});
+afterAll(() => {
+    api.restore();
+});
+
+/** Every item sent so far. */
+const sentItems = () => api.items();
+
+describe('nested blocks register once', () => {
+    // Mounted straight after init(), so each tree-rendered block registers on every `t` change of
+    // the page load (the catalog, then its locale), and the core sends one request per block.
+    it('depth 3, with a component in the outer block: each block is sent exactly once', async () => {
+        const done = await render(
+            el(
+                Translate,
+                { category: 'UI' },
+                el('p', null, 'Outer text'),
+                el(Badge),
+                el(
+                    Translate,
+                    { category: 'UI' },
+                    el('p', null, 'Middle one'),
+                    el('p', null, 'Middle two'),
+                    el(Translate, { category: 'UI' }, el('p', null, 'Inner one'), el('p', null, 'Inner two'))
+                )
+            )
+        );
+        // A block is identified by the phrases it registers with; count the block items carrying each.
+        const blocksWith = (phrase: string) =>
+            sentItems().filter(
+                (i) =>
+                    i.type === 'content_block' &&
+                    (i.phrases as Array<{ phrase: string }>).some((p) => p.phrase === phrase)
+            );
+        await until(() => blocksWith('Inner one').length > 0 && blocksWith('Outer text').length > 0);
+        await sleep(1500);
+        expect({
+            outer: blocksWith('Outer text').length,
+            middle: blocksWith('Middle one').length,
+            inner: blocksWith('Inner one').length,
+        }).toEqual({ outer: 1, middle: 1, inner: 1 });
+        await done();
+    });
+
+    it('a <Translate> and a <Phrase> nested in a fallback block keep their own params', async () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        await act(async () =>
+            root.render(
+                el(
+                    Translate,
+                    { category: 'UI' },
+                    el('p', null, 'Gallery'),
+                    el(Badge),
+                    el(
+                        Translate,
+                        { category: 'UI', params: { name: 'Ana' } },
+                        el('img', { alt: 'Photo of %name%' }),
+                        el('p', null, 'Taken by %name%'),
+                        el('p', null, 'In Lisbon')
+                    ),
+                    el(Phrase, { category: 'UI', params: { name: 'Ana' } }, 'Shared by ', el('b', null, '%name%'))
+                )
+            )
+        );
+        await until(() => blocksWith('Taken by {name}').length > 0 && blocksWith('Gallery').length > 0);
+        await sleep(1500);
+        // Each nested unit is sent once, as its own placeholders, never with the value in it.
+        expect(
+            blocksWith('Taken by {name}').map((b) => (b.phrases as Array<{ phrase: string }>).map((p) => p.phrase))
+        ).toEqual([['Photo of {name}', 'Taken by {name}', 'In Lisbon']]);
+        expect(
+            sentItems()
+                .filter((i) => i.type === 'phrase' && String(i.phrase).startsWith('Shared by'))
+                .map((i) => i.phrase)
+        ).toEqual(['Shared by {m0o}{name}{m0c}']);
+        // Nor does anything sent carry the value: not a phrase, and not the enclosing block's content,
+        // which keeps a nested host's element and drops its children.
+        expect(sentItems().filter((i) => JSON.stringify(i).includes('Ana'))).toEqual([]);
+        // And they still show their own values after the enclosing walk.
+        expect(host.querySelector('img')?.getAttribute('alt')).toBe('Photo of Ana');
+        expect(host.textContent).toContain('Taken by Ana');
+        expect(host.textContent).toContain('Shared by Ana');
+        await act(async () => root.unmount());
+        host.remove();
+    });
+});
+
+/** The content blocks sent so far that carry `phrase`. */
+const blocksWith = (phrase: string) =>
+    sentItems().filter(
+        (i) => i.type === 'content_block' && (i.phrases as Array<{ phrase: string }>).some((p) => p.phrase === phrase)
+    );
+
+/** Every debug line the core has logged that mentions `text`. */
+const noticesWith = (text: string) =>
+    consoleSpies
+        .flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' ')))
+        .filter((line) => line.includes(text));
+
+/** A `<Translate>` that falls back to the core's DOM class with a lazy child behind a Suspense placeholder. */
+function suspended(intro: string, spinner: string) {
+    let resolve!: (text: string) => void;
+    const Late = lazy(
+        () =>
+            new Promise<{ default: () => ReactNode }>(
+                (r) => (resolve = (text) => r({ default: () => el('p', null, text) }))
+            )
+    );
+    const tree = el(
+        Translate,
+        { category: 'UI' },
+        el('p', null, intro),
+        el(Suspense, { fallback: el('p', null, spinner) }, el(Late))
+    );
+    return {
+        tree,
+        resolve: (text: string) => act(async () => resolve(text)),
+        // Outside act(), React commits on its own schedule, as in a browser: a fallback it has
+        // shown stays on screen for at least its throttle (300 ms in React 19).
+        resolveOnReactsSchedule: (text: string) => resolve(text),
+    };
+}
+
+describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
+    // The core's DOM class treats what it shows at mount as provisional and keys and registers the
+    // block only once its structure has been quiet for the settle window (250 ms).
+
+    // React holds a fallback it has shown for at least 300 ms, so the content arrives about 300 ms
+    // after mount; the core's 500 ms window is still open then. Resolved outside act(), so React
+    // commits on its browser schedule.
+    it('resolved inside the settle window: only the resolved content registers, and nothing is reported', async () => {
+        const s = suspended('Intro A', 'Loading A');
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        const shown = (text: string) => Array.from(host.querySelectorAll('p')).some((p) => p.textContent === text);
+        root.render(s.tree);
+        await until(() => shown('Loading A'));
+        await sleep(50);
+        s.resolveOnReactsSchedule('Real A');
+        await until(() => shown('Real A'));
+        const done = async () => {
+            root.unmount();
+            host.remove();
+        };
+        await until(() => blocksWith('Real A').length > 0);
+        await sleep(1000);
+        expect(blocksWith('Loading A')).toHaveLength(0);
+        expect(blocksWith('Real A')).toHaveLength(1);
+        expect(noticesWith(String(blocksWith('Real A')[0].custom_id))).toEqual([]);
+        await done();
+    });
+
+    it('never resolved: nothing registers inside the window, then the placeholder registers once, unreported', async () => {
+        const s = suspended('Intro B', 'Loading B');
+        const done = await render(s.tree);
+        await sleep(100);
+        expect(blocksWith('Intro B')).toHaveLength(0);
+        await until(() => blocksWith('Loading B').length > 0);
+        await sleep(1000);
+        expect(blocksWith('Intro B')).toHaveLength(1);
+        expect(blocksWith('Loading B')).toHaveLength(1);
+        expect(noticesWith(String(blocksWith('Loading B')[0].custom_id))).toEqual([]);
+        await done();
+    });
+
+    it('resolved after the window: the placeholder stays registered, the resolved content registers, and the re-key is reported once naming both ids', async () => {
+        const s = suspended('Intro C', 'Loading C');
+        const done = await render(s.tree);
+        await until(() => blocksWith('Loading C').length > 0);
+        await sleep(400);
+        await s.resolve('Real C');
+        await until(() => blocksWith('Real C').length > 0);
+        await sleep(1000);
+        const before = String(blocksWith('Loading C')[0].custom_id);
+        const after = String(blocksWith('Real C')[0].custom_id);
+        expect(before).not.toBe(after);
+        expect(blocksWith('Loading C')).toHaveLength(1);
+        expect(blocksWith('Real C')).toHaveLength(1);
+        const notices = noticesWith('changed its structure after it settled');
+        expect(notices.filter((n) => n.includes(before))).toHaveLength(1);
+        expect(notices.filter((n) => n.includes(before))[0]).toContain(
+            `A <Translate> block registered as ${before} changed its structure after it settled and is now ${after}. If ${before} was a placeholder (a Suspense fallback still showing when the settle window closed), it stays registered.`
+        );
+        await done();
+    });
+});

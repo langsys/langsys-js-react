@@ -10,8 +10,8 @@ const fixture = process.env.LANGSYS_FIXTURE_URL ?? 'http://127.0.0.1:8787';
 let ready: Promise<unknown> | null = null;
 function initServer() {
     ready ??= LangsysApp.init({
-        projectid: 'p1',
-        key: 'k-writer',
+        projectid: process.env.LANGSYS_PLAYGROUND_PROJECT!,
+        key: process.env.LANGSYS_PLAYGROUND_WRITER!,
         UserLocaleStore: createLocaleStore('en'),
         baseLocale: 'en',
         apiUrl: `${fixture}/api`,

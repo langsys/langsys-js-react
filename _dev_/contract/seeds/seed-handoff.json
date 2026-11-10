@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000600-0001-4000-8000-000000000000",
+            "title": "react seed-handoff base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "132501|4e8c101815eeca39fac8471873fff7c1d28834ae",
+                "device_id": "react-seed-handoff-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000601-0001-4000-8000-000000000000",
+            "key": "react-seed-handoff-1-k-writer",
+            "project": "78000600-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}
