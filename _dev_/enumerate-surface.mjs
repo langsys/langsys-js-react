@@ -18,10 +18,9 @@
  * 2 = selftest failed.
  */
 import { createRequire } from 'node:module';
-import { execSync } from 'node:child_process';
 import { realpathSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
@@ -152,9 +151,8 @@ const isEntry = process.argv[1] !== undefined
 if (isEntry) {
 
 const corePath = realpathSync(require.resolve('langsys-js-typescript'));
-const coreRepo = dirname(dirname(corePath));
-let sha = 'unknown';
-try { sha = execSync(`git -C ${coreRepo} rev-parse --short HEAD`).toString().trim(); } catch {}
+// The core is a registry install: its identity is the published version, not a git checkout.
+const coreVersion = JSON.parse(readFileSync(join(dirname(dirname(corePath)), 'package.json'), 'utf8')).version;
 
 const core = require('langsys-js-typescript').LangsysApp;
 const binding = require('../dist/index.js').LangsysApp;
@@ -166,7 +164,7 @@ const privateNames = privateNamesFrom(readFileSync(dtsPath, 'utf8'), CORE_CLASS)
 
 const { coreSurface, dropped, shapeDiff, notIdentical } = diff(core, binding, privateNames);
 console.log(`core module resolved: ${corePath}`);
-console.log(`core repo @ ${sha}`);
+console.log(`core langsys-js-typescript@${coreVersion}`);
 console.log(`type surface: ${dtsPath}`);
 console.log(`declared private in ${CORE_CLASS} (${privateNames.size} names, scoped to that class block)`);
 console.log(`core PUBLIC members (${coreSurface.length}): ${coreSurface.join(', ')}`);

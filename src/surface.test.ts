@@ -60,7 +60,7 @@ describe('LangsysApp surface', () => {
         // If nothing is classified private, `publicSurface` is just the runtime
         // walk and the rows below prove less than they appear to.
         expect(privateNames.size).toBeGreaterThan(0);
-        expect(privateNames.has('resolveLocale')).toBe(true); // known private
+        expect(privateNames.has('findBestLocaleMatch')).toBe(true); // known private
         expect(privateNames.has('getCountries')).toBe(false); // known public
     });
 

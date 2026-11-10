@@ -33,7 +33,7 @@ If you need the SDK outside React (a Node script, a non-React web app), import f
 npm install langsys-js-react
 ```
 
-`langsys-js-typescript` is installed automatically as a transitive dependency. `react` is a peer dependency you already have.
+`langsys-js-typescript` (`^0.7.3`) is installed automatically as a dependency. `react` is a peer dependency you already have.
 
 ## Creating a Langsys project
 
@@ -195,7 +195,7 @@ t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
 - **A block with its own `custom_id` moves in place.** Its id names it whatever its category, so the API moves the block itself, and an older release still registering it under the old category moves it back. Move every use in one release.
 - **On a server entry** (`langsys-js-react/server`), import `inCategory` from `langsys-js-typescript`.
 - **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
-- **Needs the base SDK release that carries the move** (after 0.7.2).
+- **Needs base SDK `langsys-js-typescript@^0.7.3`**, which carries the move.
 
 ### `<Translate>` — HTML content blocks
 
