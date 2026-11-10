@@ -18,6 +18,7 @@ import { renderBlock, tokenizeTree } from 'langsys-js-typescript';
 import { LangsysApp, Translate, createLocaleStore } from './index.js';
 import { toBlockNodes } from './block-nodes.js';
 import { anyBlock, startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
+import { everyText } from './test-helpers/contract-held.js';
 import seeds from './test-helpers/contract-seeds/seed-handoff.js';
 import type { World } from './test-helpers/contract-worlds.js';
 import { catalog } from './test-helpers/ssr-scope.js';
@@ -83,6 +84,9 @@ describe('a server-collected block', () => {
         await sleep(2000);
         expect(sent.filter((i) => i.custom_id === collectedId)).toEqual([]);
         expect(anyBlock(await held())).not.toContain(collectedId);
+        // Under no id at all: nothing sent or stored carries the collected block's text.
+        expect(sent.filter((i) => JSON.stringify(i).includes('Seeded one'))).toEqual([]);
+        expect(everyText(await held())).not.toContain('Seeded one');
         await act(async () => root.unmount());
         host.remove();
     });
