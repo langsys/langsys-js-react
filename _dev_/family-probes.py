@@ -12,6 +12,9 @@ Comments are stripped before matching: the docs in src/ discuss most of these
 terms, and an unstripped grep reports participation that does not exist.
 
 Usage: python3 _dev_/family-probes.py [--json OUT]   exit 1 if any control is zero
+       python3 _dev_/family-probes.py --selftest    plants a hit for every probe and its control in
+                                                    a synthetic source, and checks a comment is not read;
+                                                    exit 2 if any pattern cannot fire
 """
 import glob, json, re, sys
 
@@ -31,9 +34,9 @@ def strip(text):
 
 CODE = {f: strip(open(f).read()) for f in SRC}
 
-def count(pattern):
+def count(pattern, code=None):
     n, where = 0, []
-    for f, body in CODE.items():
+    for f, body in (CODE if code is None else code).items():
         for i, line in enumerate(body.split('\n'), 1):
             if re.search(pattern, line):
                 n += 1; where.append(f'{f}:{i}')
@@ -71,7 +74,65 @@ FAMILIES = {
     # FRM-6: the locale header is the core's localeHeaders(), re-exported; the binding builds none.
     'FRM':   (r'Accept-Language|accept-language', r'\bLangsysApp\b'),
     'WIRE':  (r'X-Authorization|\bheaders\b|setBaseUrl\(|\bapiurl\b|toLowerCase\(|canonicalizeLocale\(', r'\bLangsysAppAPI\b'),
+    # MOVE-1..5: the previous category is handed to the core and read by it. The binding writes no
+    # `previous_category` on the wire, stamps no previous-identity marker and runs no lookup of its own;
+    # the prop it forwards is the control.
+    'MOVE':  (r'previous_category|data-(ls|langsys)-previous|previousCategoryLookup|lookupPrevious', r'\bpreviousCategory\b'),
+    # REF-1: the reference lists are the core's calls, reached through LangsysApp by reference. A
+    # binding sends and holds nothing of its own: no list path, no list call authored here.
+    'REF':   (r'countries/|currencies/|dial-codes|locales/(flat|data)|append_target_locales|\bget(Countries|Currencies|DialCodes|Locales\w*)\(', r'\bLangsysApp\b'),
 }
+
+# One line each that its probe must match, and one its control must match (selftest).
+PLANTED = {
+    'GATE': ("const w = cfg.write_enabled;", "useSyncExternalStore(a, b);"),
+    'CAT': ("const m = missingToken;", "sTranslations.get();"),
+    'REG': ("await fetch(url);", "useEffect(() => {});"),
+    'HINT': ("localStorage.setItem('a', 'b');", "document.createElement('p');"),
+    'ICU': ("const v = isICU(x);", "const f: TFunction = t;"),
+    'CID': ("const id = generateCustomId(a);", "const p = { custom_id: 'x' };"),
+    'TOK': ("const w = new TreeWalker();", "document.createElement('p');"),
+    'MARK': ("el.getAttribute('data-x');", "const a = PHRASE_MARKER_ATTR;"),
+    'RESOLVED': ("const r = el.closest('x');", "new VanillaTranslate();"),
+    'SSR': ("if (typeof window === 'undefined') return;", "useSyncExternalStore(a, b);"),
+    'GRANT': ("h['X-Write-Grant'] = g;", "setWriteGrant(g);"),
+    'CACHE': ("const c = new Map();", "const [a, b] = useState(0);"),
+    'OBS': ("console.warn('x');", "useEffect(() => {});"),
+    'MSG': ("const o = messagesCategory;", "renderServerMessage(e);"),
+    'MIG': ("convertLegacy(files);", "const t = useT();"),
+    'SNAP': ("loadSnapshot(s);", "LangsysApp.init({});"),
+    'SRV': ("const l = req.headers['Accept-Language'];", "useSyncExternalStore(a, b);"),
+    'VAR': ("el.setAttribute('data-ls-param', n);", "registerBlock(n, o);"),
+    'FRM': ("h['Accept-Language'] = l;", "LangsysApp.init({});"),
+    'WIRE': ("const u = l.toLowerCase();", "const a = LangsysAppAPI;"),
+    'MOVE': ("body.previous_category = p;", "const p = props.previousCategory;"),
+    'REF': ("const l = await LangsysApp.getCountries('en');", "LangsysApp.init({});"),
+}
+
+
+def selftest():
+    ok = True
+    assert set(PLANTED) == set(FAMILIES), 'every family needs a planted pair'
+    for fam, (probe, control) in FAMILIES.items():
+        hit, ctl = PLANTED[fam]
+        # The same comment strip the real sources go through.
+        code = {'planted.ts': strip(f'{hit}\n{ctl}')}
+        commented = {'planted.ts': strip(f'// {hit}\n/* {hit} */\n{ctl}')}
+        empty = {'planted.ts': 'const x = 1;'}
+        results = {
+            'probe fires on a planted hit': count(probe, code)[0] >= 1,
+            'control fires on its own line': count(control, code)[0] >= 1,
+            'a hit in a comment is not read': count(probe, commented)[0] == 0,
+            'a source with neither reads control zero': count(control, empty)[0] == 0 and count(probe, empty)[0] == 0,
+        }
+        for name, passed in results.items():
+            ok &= passed
+            if not passed: print(f'  selftest MISSED  {fam}: {name}')
+    print(f'  selftest {"all caught" if ok else "FAILED"}: {len(FAMILIES)} families x 4 checks')
+    sys.exit(0 if ok else 2)
+
+
+if '--selftest' in sys.argv: selftest()
 
 out, bad = {}, []
 print(f'files scanned: {len(SRC)}  ({", ".join(SRC)})')
