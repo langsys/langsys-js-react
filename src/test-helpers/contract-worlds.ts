@@ -33,6 +33,7 @@ export interface BlockSeed {
 }
 
 export interface ProjectSeed {
+    title?: string;
     base_locale?: string;
     target_locales?: string[];
     website_url?: string | null;

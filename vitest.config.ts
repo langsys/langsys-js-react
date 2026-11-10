@@ -17,7 +17,14 @@ export default defineConfig({
         // never passes by skipping. Every request there is a real one and the clock waits in real
         // time, so a case and a hook get the time a real API takes.
         projects: [
-            { extends: true, test: { name: 'unit', include: ['src/**/*.test.ts', 'src/**/*.test.tsx'], exclude: [...configDefaults.exclude, '**/*.contract.test.ts{,x}'] } },
+            {
+                extends: true,
+                test: {
+                    name: 'unit',
+                    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+                    exclude: [...configDefaults.exclude, '**/*.contract.test.ts{,x}'],
+                },
+            },
             {
                 extends: true,
                 test: {

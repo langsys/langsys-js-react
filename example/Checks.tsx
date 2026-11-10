@@ -13,22 +13,20 @@ import {
 } from 'langsys-js-react';
 
 /**
- * One visible check per feature, against the contract double (`npm run fixture`). Open
- * `/?checks=1` (write key) or `/?checks=1&key=public` (read-only key that reports pages).
- * The "Accepted by the double" panel reads the double's accepted state every second, so each
- * check shows what the server actually stored, not what the SDK says it sent. See TESTING.md.
+ * One visible check per feature, against a real Langsys API through the contract forwarder
+ * (`npm run fixture`). Open `/?checks=1` (write key) or `/?checks=1&key=public` (read-only key
+ * that reports pages). The "Accepted by the API" panel reads the project's catalog and the hints
+ * the API accepted every second, so each check shows what the server actually stored, not what
+ * the SDK says it sent. See TESTING.md.
  */
 
-const KEYS: Record<string, string> = { writer: 'k-writer', public: 'k-public' };
+const KEYS: Record<string, string> = __PLAYGROUND__.keys;
+const PROJECT = __PLAYGROUND__.projectId;
 
+/** What the API holds for the project, as its catalog serves it, and the hints it accepted. */
 interface AcceptedState {
-    projects: Record<
-        string,
-        {
-            phrases: Array<{ category: string | null; phrase: string }>;
-            blocks: Array<{ category: string | null; custom_id: string; phrases: Array<{ phrase: string }> }>;
-        }
-    >;
+    phrases: Array<{ category: string; phrase: string }>;
+    blocks: Array<{ category: string; custom_id: string; phrases: string[] }>;
     hints: Array<{ project_id: string; url: string }>;
 }
 
@@ -39,7 +37,7 @@ export function Checks() {
 
     useEffect(() => {
         LangsysApp.init({
-            projectid: 'p1',
+            projectid: PROJECT,
             key: KEYS[keyName] ?? keyName,
             UserLocaleStore: localeStore,
             baseLocale: 'en',
@@ -50,7 +48,8 @@ export function Checks() {
         });
     }, [keyName, localeStore]);
 
-    if (error) return <main style={styles.main}>Init failed: {error}. Is the double running (npm run fixture)?</main>;
+    if (error)
+        return <main style={styles.main}>Init failed: {error}. Is the forwarder running (npm run fixture)?</main>;
     return (
         <main style={styles.main}>
             <Header keyName={keyName} locale={locale} setLocale={setLocale} />
@@ -231,35 +230,51 @@ function LocaleHeader() {
     );
 }
 
-/** What the double accepted for project p1. */
+/** What the API accepted for the playground's project: its catalog (read with the write key) and its hints. */
+async function readAccepted(): Promise<AcceptedState> {
+    const catalog = await fetch(`/lsapi/translations?project_id=${PROJECT}&locale=es-es`, {
+        headers: { 'x-Authorization': KEYS.writer },
+    }).then((r) => r.json());
+    const hints = await fetch(`/lsfixture/state?project=${PROJECT}`).then((r) => r.json());
+    const state: AcceptedState = { phrases: [], blocks: [], hints: hints.hints };
+    for (const [category, entries] of Object.entries((catalog.data ?? {}) as Record<string, Record<string, unknown>>)) {
+        for (const [name, value] of Object.entries(entries ?? {})) {
+            if (name.startsWith('__')) continue;
+            if (value && typeof value === 'object')
+                state.blocks.push({
+                    category,
+                    custom_id: name,
+                    phrases: Object.keys(value).filter((k) => !k.startsWith('__')),
+                });
+            else state.phrases.push({ category, phrase: name });
+        }
+    }
+    return state;
+}
+
+/** What the API accepted for the playground's project. */
 function Accepted() {
     const [state, setState] = useState<AcceptedState | null>(null);
     useEffect(() => {
         const tick = () =>
-            fetch('/lsfixture/state')
-                .then((r) => r.json())
+            readAccepted()
                 .then(setState)
                 .catch(() => setState(null));
         tick();
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
     }, []);
-    const p = state?.projects.p1;
     return (
         <section style={styles.card} data-check="accepted">
-            <h2>Accepted by the double</h2>
+            <h2>Accepted by the API</h2>
             {!state ? (
-                <p>Not reachable at /lsfixture/state.</p>
+                <p>Not reachable at /lsapi and /lsfixture/state.</p>
             ) : (
                 <>
-                    <h3>Phrases ({p?.phrases.length ?? 0})</h3>
-                    <List items={(p?.phrases ?? []).map((x) => `${x.category ?? ''} · ${x.phrase}`)} />
-                    <h3>Blocks ({p?.blocks.length ?? 0})</h3>
-                    <List
-                        items={(p?.blocks ?? []).map(
-                            (b) => `${b.custom_id} · ${b.phrases.map((x) => x.phrase).join(' | ')}`
-                        )}
-                    />
+                    <h3>Phrases ({state.phrases.length})</h3>
+                    <List items={state.phrases.map((x) => `${x.category} · ${x.phrase}`)} />
+                    <h3>Blocks ({state.blocks.length})</h3>
+                    <List items={state.blocks.map((b) => `${b.custom_id} · ${b.phrases.join(' | ')}`)} />
                     <h3>Hints ({state.hints.length})</h3>
                     <List items={state.hints.map((h) => h.url)} />
                 </>

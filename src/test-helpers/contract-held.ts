@@ -11,8 +11,12 @@ export const block = (...phrases: string[]) => `BLOCK[${[...phrases].sort().join
 /** Every phrase and block the catalog holds, as `category:phrase` and `category:BLOCK[phrases]`, sorted. */
 export function listHeld(held: HeldCatalog): string[] {
     return [
-        ...Object.entries(held.phrases).flatMap(([category, phrases]) => phrases.map((phrase) => `${category}:${phrase}`)),
-        ...Object.entries(held.blocks).flatMap(([category, blocks]) => Object.values(blocks).map((phrases) => `${category}:${block(...phrases)}`)),
+        ...Object.entries(held.phrases).flatMap(([category, phrases]) =>
+            phrases.map((phrase) => `${category}:${phrase}`)
+        ),
+        ...Object.entries(held.blocks).flatMap(([category, blocks]) =>
+            Object.values(blocks).map((phrases) => `${category}:${block(...phrases)}`)
+        ),
     ].sort();
 }
 

@@ -425,13 +425,13 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /**
  * Polls `check` until it holds. Every poll is a real read from the case's own address, where the
  * API allows 120 requests a minute, so it polls once a second and leaves the rest to the SDK
- * under test.
+ * under test. A check that reads no API (a test of what the page does in-process) polls faster.
  */
-export async function until(check: () => boolean | Promise<boolean>, timeoutMs = 30_000): Promise<void> {
+export async function until(check: () => boolean | Promise<boolean>, timeoutMs = 30_000, pollMs = 1000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         if (await check()) return;
-        await sleep(1000);
+        await sleep(pollMs);
     }
     throw new Error(`condition not met within ${timeoutMs}ms`);
 }
