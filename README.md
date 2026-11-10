@@ -141,7 +141,7 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Before passing a `Date`, or a number that isn't a plural count, read the formatting note under [Plurals and gender](#plurals-and-gender-write-the-sentence-flat): on this version they break inside a plural or gender form. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
+Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically. That holds only while the translation has no plural or gender form in it: on this version a `Date`, or a number that isn't the plural count, breaks inside one. See the formatting note under [Plurals and gender](#plurals-and-gender-write-the-sentence-flat).
 
 #### Plurals and gender: write the sentence flat
 
@@ -163,7 +163,7 @@ t('{name} has been invited', 'Team', params);   // es: "Ana ha sido invitada"
 
 In debug mode `<Phrase>` and `<Translate>` warn that `name_gender` matches no placeholder and tell you to write `%name_gender%`. Ignore that advice: it would print the gender into the sentence.
 
-The same rule covers formatting: don't write `{n, number}`, `{d, date}` or `{t, time}`. A plain `{n}` formats numbers and dates (above), but on this version only while the translation has no plural or gender form in it, and any translation can gain one. Inside one, a `Date` breaks the render: `t()` returns an array, which React refuses as a child ("Objects are not valid as a React child"), and `<Phrase>`/`<Translate>` print the date's `toString()`. A number other than the count renders unformatted (`1234.5`, not `1.234,5`). So pass dates, times and every number except the count as strings you formatted with the loaded locale:
+The same rule covers formatting: don't write `{n, number}`, `{d, date}` or `{t, time}`. A plain `{n}` formats numbers and dates (above), but on this version only while the translation has no plural or gender form in it, and any translation can gain one. Inside one, a `Date` breaks the render: `t()` returns an array, which React refuses as a child ("Objects are not valid as a React child"), and `<Phrase>`/`<Translate>` print the pieces comma-joined around the date's `toString()`, in the host's timezone, so server and client can differ. In a `<Phrase>` with inline markup the text comes out garbled. Any number other than the plural's `#` renders unformatted (`1234.5`, not `1.234,5`), and so does the count itself where a translation writes `{count}` instead of `#`. So pass dates, times and every number except the count as strings you formatted with the loaded locale:
 
 ```tsx
 const locale = useCurrentLocale() || 'en';   // '' until the first catalog loads, and Intl throws on ''
@@ -221,7 +221,7 @@ The component:
 </Translate>
 ```
 
-`<Translate>` also accepts `params` for placeholder interpolation. Write placeholders as **`%key%`** directly in the markup — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting. Change `params` after mount and the block re-renders:
+`<Translate>` also accepts `params` for placeholder interpolation. Write placeholders as **`%key%`** directly in the markup — applied to the resolved text of content-block nodes, translatable attributes, `<option>` text, and single-token content (untranslated fallbacks included). Number/Date values get CLDR locale formatting, except inside a plural or gender form (see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat)). Change `params` after mount and the block re-renders:
 
 ```tsx
 <Translate category="Cart" params={{ count: itemCount }}>
@@ -231,7 +231,7 @@ The component:
 
 > **Use `%key%` in `<Translate>`/`<Phrase>` markup, not bare `{key}`.** In JSX a literal `{count}` is a JavaScript expression that React evaluates *before* the SDK's DOM walker sees the text — the braces vanish and interpolation silently breaks (it still looks fine in the base locale, which hides it). Worse than breaking: the evaluated value is captured *as part of the phrase*, so every distinct value hashes to its own content block. `%count%` passes through JSX as plain text; the SDK normalizes it to canonical `{count}` at capture, so **translators and the catalog only ever see `{count}`**, and both spellings hash to the same content-block id. Keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left untouched. An unknown `%key%` with no matching param renders as `{key}` — matching `t()`'s behavior for unknown keys. (`t()` and the hooks keep `{key}`: JS strings reach the SDK literally, so there's no collision.)
 
-> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production and only re-warns when the set of param keys changes.
+> Since base SDK 0.4.2, running with `debug: true` catches this mistake for you: if you pass `params` whose keys match no placeholder in the captured content, the SDK warns and names the fix (`… received params with no matching placeholder … write %count% instead`). It's silent in production and only re-warns when the set of param keys changes. One exception: a generated gender argument such as `name_gender` (see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat)) is never in the content, so it always triggers the warning. Ignore it there.
 
 Why that second consequence is the expensive one — measured against the shipped tokenizer (`tokenizeElement` + `generateCustomId`):
 
