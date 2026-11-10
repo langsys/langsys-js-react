@@ -1,0 +1,27 @@
+{
+    "projects": [
+        {
+            "id": "78000200-0001-4000-8000-000000000000",
+            "title": "react hint13 base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "machine_translate_new_phrases": true,
+            "user": {
+                "token": "130501|5d8a14aec86fadda042b31d93bf410706fc9207b",
+                "device_id": "react-hint13-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000201-0001-4000-8000-000000000000",
+            "key": "react-hint13-1-k-public",
+            "project": "78000200-0001-4000-8000-000000000000",
+            "type": "ip_write",
+            "report_discovered_content": true
+        }
+    ]
+}

@@ -3,7 +3,8 @@
 /**
  * VAR-6's Test, end to end: with the transform enabled (the Vite plugin, in this repo's test
  * config), components interpolating a user's value register one phrase with the placeholder
- * across users, measured against the contract fixture's stored state; the placeholder is named
+ * across users, measured against what the API on an SDK test clone accepted (spec CONF-2), read
+ * back from its catalog and a block's stored content; the placeholder is named
  * per VAR-2; a value inside a subtree that is not translated is marked (VAR-3), so a phrase keys
  * the subtree as one empty pair (TOK-1), a block's stored content holds the placeholder, and the
  * page shows the value; and a plural translation of that phrase renders from the param.
@@ -12,7 +13,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, createElement as el, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LangsysApp, createLocaleStore } from '../index.js';
-import { startContractFixture, sleep, type ContractFixture } from '../test-helpers/contract-fixture.js';
+import { startContractFixture, sleep, until, type ContractFixture } from '../test-helpers/contract-fixture.js';
+import { block, blocksIn, listHeld, phrasesIn } from '../test-helpers/contract-held.js';
+import seeds from '../test-helpers/contract-seeds/transform.js';
+import type { World } from '../test-helpers/contract-worlds.js';
 import { catalog } from '../test-helpers/ssr-scope.js';
 import {
     Account,
@@ -55,19 +59,18 @@ import {
 } from './fixtures/app.js';
 
 let fx: ContractFixture;
+let w: World;
 
 beforeAll(async () => {
     fx = await startContractFixture();
-    await fx.seed({
-        projects: [{ id: 'p1', base_locale: 'en', target_locales: ['es-es'], website_url: 'https://site.local' }],
-        keys: [{ key: 'k-writer', project: 'p1', type: 'write' }],
-    });
+    w = seeds.take('base');
+    await fx.use(w);
     for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error', 'debug'] as const) {
         vi.spyOn(console, m).mockImplementation(() => {});
     }
     await LangsysApp.init({
-        projectid: 'p1',
-        key: 'k-writer',
+        projectid: w.project(),
+        key: w.key('k-writer'),
         UserLocaleStore: createLocaleStore('en'),
         baseLocale: 'en',
         apiUrl: fx.baseUrl,
@@ -89,14 +92,30 @@ async function show(node: ReactNode): Promise<string> {
     return text;
 }
 
-/** Every string the double stored, as `category:phrase` (a block as its phrases). */
-async function stored(): Promise<string[]> {
-    const p = (await fx.state()).projects.p1;
-    return [
-        ...p.phrases.map((x) => `${x.category}:${x.phrase}`),
-        ...p.blocks.map((b) => `${b.category}:BLOCK[${b.phrases.map((x) => x.phrase).join('|')}]`),
-    ].sort();
-}
+/** What the API serves the project's key: everything it accepted. */
+const held = () => fx.held(w.key('k-writer'), w.project(), 'es-es');
+
+/** Every string the API holds, as `category:phrase` (a block as its phrases). */
+const stored = async (): Promise<string[]> => listHeld(await held());
+
+/** The blocks the API stored, each with the content it holds, as the project's owner reads it. */
+const storedBlocks = () => fx.storedBlocks(w, w.key('k-writer'), 'es-es');
+
+/** Everything the API holds, whole, for the clause that no value is in it. */
+const everything = async () => JSON.stringify([await held(), await storedBlocks()]);
+
+/** The entries of `list` in the given categories (a pattern over `category:`). */
+const in_ = (list: string[], pattern: RegExp) => list.filter((x) => pattern.test(x));
+
+/**
+ * Waits for the API to hold at least `count` entries in the categories `pattern` names, the
+ * units that register and so the control for what must not, then past a later flush that would
+ * add what must not be there.
+ */
+const settled = async (pattern: RegExp, count: number) => {
+    await until(async () => in_(await stored(), pattern).length >= count);
+    await sleep(2000);
+};
 
 describe('the placeholder transform, rendered for several users', () => {
     it('each sentence registers once, with its placeholder, and renders each user\'s value', async () => {
@@ -109,7 +128,7 @@ describe('the placeholder transform, rendered for several users', () => {
             texts.push(await show(el(Totals, v)));
             texts.push(await show(el(Formatted, v)));
         }
-        await sleep(1500);
+        await settled(/^[A-F]:/, 6);
 
         expect(texts).toEqual([
             'Hello Ana, welcome back',
@@ -134,7 +153,7 @@ describe('the placeholder transform, rendered for several users', () => {
             'E:Sum {value}, product {value_2}',
             'F:{value} of {value_2}',
         ]);
-    }, 60_000);
+    });
 
     it('a plural translation of the registered phrase renders from the param', async () => {
         LangsysApp.seedCatalog(
@@ -147,7 +166,7 @@ describe('the placeholder transform, rendered for several users', () => {
         expect(await show(el(Cart, { items: [0] }))).toBe('Tienes 1 artículo');
         expect(await show(el(Cart, { items: [0, 0, 0] }))).toBe('Tienes 3 artículos');
         expect(await show(el(Greeting, { user: { firstName: 'Ana' } }))).toBe('Hola Ana, bienvenido de nuevo');
-    }, 30_000);
+    });
 
     it('a value inside <DontTranslate> or translate="no" is no phrase\'s text, a block stores its placeholder, and each page shows it', async () => {
         const users = ['ana@example.com', 'bo@example.com'];
@@ -158,7 +177,7 @@ describe('the placeholder transform, rendered for several users', () => {
             texts.push(await show(el(AccountHost, { user: { email } })));
             texts.push(await show(el(ReplyTo, { user: { email } })));
         }
-        await sleep(1500);
+        await settled(/^(G|H|I|J):/, 4);
 
         expect(texts).toEqual(
             users.flatMap((email) => [
@@ -168,23 +187,24 @@ describe('the placeholder transform, rendered for several users', () => {
                 `Reply to ${email} soon`,
             ]),
         );
-        const p = (await fx.state()).projects.p1;
-        const phrases = (category: string) => p.phrases.filter((x) => x.category === category).map((x) => x.phrase);
+        const h = await held();
+        const phrases = (category: string) => phrasesIn(h, category);
         // A phrase keys the subtree as one empty pair (TOK-1), the value and its marker included.
         expect(phrases('G')).toEqual(['Signed in as {m0o}{m0c} today']);
         expect(phrases('J')).toEqual(['Reply to {m0o}{m0c} soon']);
-        const block = (category: string) => p.blocks.filter((b) => b.category === category);
-        const blocks = { H: block('H')[0], I: block('I')[0] };
-        expect([block('H').length, block('I').length]).toEqual([1, 1]);
-        expect(blocks.H.phrases.map((x) => x.phrase)).toEqual(['Signed in as', 'today', 'Manage your account']);
+        const owned = await storedBlocks();
+        const contentOf = (category: string) => owned.filter((b) => b.category === category).map((b) => b.content);
+        expect([blocksIn(h, 'H').length, blocksIn(h, 'I').length]).toEqual([1, 1]);
+        // The catalog lists a block's phrases in sorted order.
+        expect(blocksIn(h, 'H')[0]).toEqual(['Manage your account', 'Signed in as', 'today']);
         // A block's content holds the marked value as its placeholder, the marker removed (VAR-3).
-        expect(blocks.H.content).toBe(
+        expect(contentOf('H')).toEqual([
             '<p>Signed in as <span translate="no" data-ls-dont-translate="">{email}</span> today</p><p>Manage your account</p>',
-        );
-        expect(blocks.I.phrases.map((x) => x.phrase)).toEqual(['Reply to', 'soon']);
-        expect(blocks.I.content).toBe('<p>Reply to <span translate="no">{email}</span> soon</p>');
-        expect(JSON.stringify(p)).not.toMatch(/example\.com/);
-    }, 60_000);
+        ]);
+        expect(blocksIn(h, 'I')[0]).toEqual(['Reply to', 'soon']);
+        expect(contentOf('I')).toEqual(['<p>Reply to <span translate="no">{email}</span> soon</p>']);
+        expect(await everything()).not.toMatch(/example\.com/);
+    });
 
     // The build cannot read `translate={mode}` or `data-notrans={true}`, and the core shows code and
     // notation as written: each value there is marked, which reads correctly whether the element
@@ -201,7 +221,7 @@ describe('the placeholder transform, rendered for several users', () => {
             texts.push(await show(el(Area, { area })));
             texts.push(await show(el(AreaBlock, { area })));
         }
-        await sleep(1500);
+        await settled(/^M:/, 1);
 
         expect(texts).toEqual([
             ...users.flatMap((email) => [`Write to ${email} now`, `Write to ${email} now`, `Mail ${email} later`]),
@@ -210,12 +230,13 @@ describe('the placeholder transform, rendered for several users', () => {
             'Area 30 m² units',
             'Area 30 m² units',
         ]);
-        const p = (await fx.state()).projects.p1;
-        expect(p.phrases.filter((x) => x.category === 'M').map((x) => x.phrase)).toEqual(['Area {m0o}{m0c} units']);
+        // The phrase beside it registers: its wait is the control for the block that registers nothing.
+        const h = await held();
+        expect(phrasesIn(h, 'M')).toEqual(['Area {m0o}{m0c} units']);
         // The block would store the area in its content, where no marker can stand: it registers nothing.
-        expect([...p.phrases, ...p.blocks].filter((x) => x.category === 'N')).toEqual([]);
-        expect(JSON.stringify(p)).not.toMatch(/example\.com|m²/);
-    }, 60_000);
+        expect([h.phrases.N ?? [], Object.keys(h.blocks.N ?? {})]).toEqual([[], []]);
+        expect(await everything()).not.toMatch(/example\.com|m²/);
+    });
 
     // Each value names its own unit: a nested <Phrase> keys as it does standalone, whatever value the
     // enclosing <Translate> holds (VAR-2).
@@ -224,17 +245,17 @@ describe('the placeholder transform, rendered for several users', () => {
         for (const [user, owner] of [['Ana', 'Cy'], ['Bo', 'Di']]) {
             texts.push(await show(el(Credited, { user: { name: user }, owner: { name: owner } })));
         }
-        await sleep(1500);
-        const nested = (await fx.state()).projects.p1.phrases.filter((x) => x.category === 'P').map((x) => x.phrase);
+        await settled(/^(O|P):/, 2);
+        const nested = phrasesIn(await held(), 'P');
         texts.push(await show(el(Byline, { owner: { name: 'Cy' } })));
-        await sleep(1500);
-        const phrases = (await fx.state()).projects.p1.phrases;
+        await sleep(2000);
+        const h = await held();
 
         expect(texts).toEqual(['Hi AnaBy Cy', 'Hi BoBy Di', 'By Cy']);
         expect(nested).toEqual(['By {name}']);
-        expect(phrases.filter((x) => x.category === 'P').map((x) => x.phrase)).toEqual(['By {name}']);
-        expect(phrases.filter((x) => x.category === 'O').map((x) => x.phrase)).toEqual(['Hi {name}']);
-    }, 60_000);
+        expect(phrasesIn(h, 'P')).toEqual(['By {name}']);
+        expect(phrasesIn(h, 'O')).toEqual(['Hi {name}']);
+    });
 
     // A value React renders as nodes is not text: `{children}` and an expression holding JSX are left
     // alone, and a param that turns out to be an element or an array is put back where it stood.
@@ -260,16 +281,16 @@ describe('the placeholder transform, rendered for several users', () => {
         expect(await html(el(Count, { n: 1234567, mode: 'no' }))).toContain('Total <span translate="no"><span>1234567</span></span> items');
         await act(async () => root.unmount());
         host.remove();
-        await sleep(1500);
-        const p = (await fx.state()).projects.p1;
+        await settled(/^(R|V|W):/, 4);
+        const h = await held();
         // Children are the content: a string and an element's text register as they render.
-        expect(p.phrases.filter((x) => x.category === 'R').map((x) => x.phrase).sort()).toEqual(['Hi', 'Welcome']);
-        expect(p.phrases.filter((x) => 'VW'.includes(x.category!)).map((x) => `${x.category}:${x.phrase}`).sort()).toEqual([
+        expect(phrasesIn(h, 'R')).toEqual(['Hi', 'Welcome']);
+        expect(in_(listHeld(h), /^(V|W):/)).toEqual([
             'V:Open File > Save as {name}',
             'W:Hi {nick}!',
         ]);
-        expect(JSON.stringify(p)).not.toMatch(/object Object|1[.,]?234[.,]?567/);
-    }, 60_000);
+        expect(await everything()).not.toMatch(/object Object|1[.,]?234[.,]?567/);
+    });
 
     it('children beside text and a value in a fragment register once; one in raw text or a text-only element registers nothing', async () => {
         const host = document.createElement('div');
@@ -300,10 +321,10 @@ describe('the placeholder transform, rendered for several users', () => {
             '<translate><p>Pick a code</p><select translate="no"><option value="Bo-1" selected="">Bo-1</option></select></translate>',
             '<span>Read <b>terms</b></span>',
         ]);
-        await sleep(1500);
-        expect((await stored()).filter((x) => /^[XYZQ]:/.test(x))).toEqual(['X:Read {children}', 'X:Read {m0o}terms{m0c}', 'Y:Hi {name} today']);
-        expect(JSON.stringify((await fx.state()).projects.p1)).not.toMatch(/Ana|Bo-1|Bo@/);
-    }, 60_000);
+        await settled(/^[XY]:/, 3);
+        expect(in_(await stored(), /^[XYZQ]:/)).toEqual(['X:Read {children}', 'X:Read {m0o}terms{m0c}', 'Y:Hi {name} today']);
+        expect(await everything()).not.toMatch(/Ana|Bo-1|Bo@/);
+    });
 
     // Whichever way a runtime opt-out turns out, the unit renders its values, formatted where they are
     // translated, and registers the sentence with placeholders, never a value.
@@ -317,7 +338,7 @@ describe('the placeholder transform, rendered for several users', () => {
             shown.push(await show(el(CountPhrase, { n: 3, mode })));
             shown.push(await show(el(Count, { n: 4, mode })));
         }
-        await sleep(1500);
+        await settled(/^(KP|KB|UP|U):/, 8);
         expect(shown).toEqual([
             ...['yes', 'no'].flatMap(() => [
                 'Hello Ana, press Ctrl+S now',
@@ -332,19 +353,20 @@ describe('the placeholder transform, rendered for several users', () => {
         ]);
         // Each opt-out stores its own form: the value's place as a placeholder where it is translated,
         // and the excluded element as an empty pair (a phrase) or as written (a block's content).
-        expect((await stored()).filter((x) => /^(KP|KB|UP|U):/.test(x))).toEqual([
-            'KB:BLOCK[Hello {name}, press|now]',
-            'KB:BLOCK[Hello {name}, press|{k}|now]',
-            'KP:Hello {name}, press {m0o}{k}{m0c} now',
-            'KP:Hello {name}, press {m0o}{m0c} now',
-            'U:BLOCK[Total|items]',
-            'U:BLOCK[Total|{n}|items]',
-            'UP:Total {m0o}{m0c} items',
-            'UP:Total {m0o}{n}{m0c} items',
-        ]);
-        expect(JSON.stringify((await fx.state()).projects.p1)).not.toMatch(/Ana|Ctrl|Cmd/);
-
-    }, 60_000);
+        expect(in_(await stored(), /^(KP|KB|UP|U):/)).toEqual(
+            [
+                `KB:${block('Hello {name}, press', 'now')}`,
+                `KB:${block('Hello {name}, press', '{k}', 'now')}`,
+                'KP:Hello {name}, press {m0o}{k}{m0c} now',
+                'KP:Hello {name}, press {m0o}{m0c} now',
+                `U:${block('Total', 'items')}`,
+                `U:${block('Total', '{n}', 'items')}`,
+                'UP:Total {m0o}{m0c} items',
+                'UP:Total {m0o}{n}{m0c} items',
+            ].sort(),
+        );
+        expect(await everything()).not.toMatch(/Ana|Ctrl|Cmd/);
+    });
 
     // A phrase holding a marker is served as its source before a translation exists, markers and all:
     // every value in it is marked, so each shows as written, never as a placeholder.
@@ -364,14 +386,14 @@ describe('the placeholder transform, rendered for several users', () => {
             'Ana sent report.pdf',
             'Rated 3 stars',
         ]);
-        await sleep(1500);
-        expect((await stored()).filter((x) => /^H[1345]:/.test(x))).toEqual([
+        await settled(/^H[1345]:/, 4);
+        expect(in_(await stored(), /^H[1345]:/)).toEqual([
             'H1:Hello {name}, you have {count} items',
             'H3:Total {m0o}{big}{m0c} items',
             'H3:Total {m0o}{m0c} items',
             'H4:{user_name} sent {name}',
         ]);
-    }, 60_000);
+    });
 
     // A block's tokens include the attributes a translator reads: a value there is a placeholder
     // too, and each page shows its own. A value alone in an attribute fills it as a value fills text.
@@ -393,7 +415,7 @@ describe('the placeholder transform, rendered for several users', () => {
         for (const user of [{ name: 'Ana', id: 1 }, { name: 'Bo', id: 2 }, { id: 3 }]) shown.push(await markup(el(Avatar, { user })));
         for (const name of ['Ana', 'Bo']) shown.push(await markup(el(Format, { x: { name } })));
         shown.push(await markup(el(Pictured, { x: ['ana', 'bo'] })));
-        await sleep(1500);
+        await settled(/^(AT|AV|PS|PX):/, 4);
         expect(shown).toEqual([
             '<translate><img alt="Photo of Ana" src="/p.png"> Hi Ana</translate>',
             '<translate><img alt="Photo of Bo" src="/p.png"> Hi Bo</translate>',
@@ -406,14 +428,16 @@ describe('the placeholder transform, rendered for several users', () => {
             // A list is written into an attribute as JavaScript writes it, whole or in the text.
             '<translate><img data-tooltip="ana,bo" title="Pic ana,bo" src="/x.png"> Gallery</translate>',
         ]);
-        expect((await stored()).filter((x) => /^(AT|AV|PS|PX):/.test(x))).toEqual([
-            'AT:BLOCK[Photo of {name}|Hi {name}]',
-            'AV:BLOCK[{name}|Profile of {id}|Profile]',
-            'PS:BLOCK[%s{name}|Hi|Use %s{name}]',
-            'PX:BLOCK[Pic {x}|Gallery]',
-        ]);
-        expect(JSON.stringify((await fx.state()).projects.p1)).not.toMatch(/Ana|Bo"|Profile of \d/);
-    }, 60_000);
+        expect(in_(await stored(), /^(AT|AV|PS|PX):/)).toEqual(
+            [
+                `AT:${block('Photo of {name}', 'Hi {name}')}`,
+                `AV:${block('{name}', 'Profile of {id}', 'Profile')}`,
+                `PS:${block('%s{name}', 'Hi', 'Use %s{name}')}`,
+                `PX:${block('Pic {x}', 'Gallery')}`,
+            ].sort(),
+        );
+        expect(await everything()).not.toMatch(/Ana|Bo"|Profile of \d/);
+    });
 
     it('a marked value in a <Phrase> shows its new value when it changes', async () => {
         const host = document.createElement('div');

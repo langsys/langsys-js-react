@@ -6,26 +6,27 @@ import { createRoot, type Root } from 'react-dom/client';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate, type NavigateFunction } from 'react-router';
 import { LangsysApp, createLocaleStore, useNotifyNavigation, useT } from './index.js';
 import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
+import seeds from './test-helpers/contract-seeds/hint13.js';
+import type { World } from './test-helpers/contract-worlds.js';
 
 /**
- * HINT-13 against the contract double (tier `contract`), through React Router's BrowserRouter.
+ * HINT-13 against the API on an SDK test clone (tier `contract`, spec CONF-2), through React
+ * Router's BrowserRouter.
  *
  * A persistent layout sits beside the routes as a stable element. React skips re-rendering a
  * subtree whose element is unchanged, so on a route change the layout never looks its phrase
  * up again and the new page is never credited with it. `useNotifyNavigation` makes it re-enter.
  *
- * Asserted on the double's accepted state: a hint for page B exists with the hook, and does
- * not exist without it. The key is read-only from here and permitted to report, so the double
- * stores any hint the SDK sends — an absent hint means the SDK sent none.
+ * Asserted on the hints the clone accepted for the project, read back through the forwarder's
+ * reader: a hint for page B exists with the hook, and does not exist without it. The project
+ * machine-translates new content and the key is read-only from here and permitted to report, so
+ * the API stores any hint the SDK sends and the case's address is under the hint rate — an absent
+ * hint means the SDK sent none.
  */
 
 let fx: ContractFixture;
-const SEED = {
-    config: { renderer_egress_ips: ['10.9.9.9'] },
-    projects: [{ id: 'p1', base_locale: 'en', target_locales: ['es-es'], website_url: 'https://site.local' }],
-    keys: [{ key: 'k-public', project: 'p1', type: 'ip_write', report_discovered_content: true }],
-};
-const hints = async () => (await fx.state()).hints.map((h) => h.url);
+let w: World;
+const hints = async () => (await fx.hints(w)).map((h) => h.url);
 
 function PersistentLayout() {
     const t = useT();
@@ -74,13 +75,14 @@ const runOutJitter = () => act(async () => void (await vi.advanceTimersByTimeAsy
 
 beforeAll(async () => {
     fx = await startContractFixture();
-    await fx.seed(SEED);
+    w = seeds.take('base');
+    await fx.use(w);
     for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error'] as const) {
         vi.spyOn(console, m).mockImplementation(() => {});
     }
     await LangsysApp.init({
-        projectid: 'p1',
-        key: 'k-public',
+        projectid: w.project(),
+        key: w.key('k-public'),
         UserLocaleStore: createLocaleStore('es-es'),
         baseLocale: 'en',
         apiUrl: fx.baseUrl,
@@ -109,7 +111,10 @@ describe('HINT-13 — a route change re-enters the SDK', () => {
         await act(async () => root.unmount());
     });
 
-    it('without it, the same layout records nothing for page D, though the double would store it', async () => {
+    it('without it, the same layout records nothing for page D, though the API would store it', async () => {
+        // The first case's hints are counted against the address's hint rate (5 a minute); the
+        // second runs from an address of its own, as a visitor on another network would.
+        await fx.update(w, { caller: w.moved });
         window.history.pushState({}, '', '/c');
         const root = await mount(false);
         await runOutJitter();
@@ -119,7 +124,7 @@ describe('HINT-13 — a route change re-enters the SDK', () => {
         await act(async () => navigate('/d'));
         expect(window.location.href).toBe('https://site.local/d');
         await runOutJitter();
-        await sleep(600);
+        await sleep(3000);
         expect(await hints()).not.toContain('https://site.local/d');
         await act(async () => root.unmount());
     });

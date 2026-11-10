@@ -7,20 +7,28 @@
  * class's walk takes over a marked host nested inside it that nothing claims (MARK-2). A
  * tree-rendered `<Translate>` or `<Phrase>` under such an ancestor registers itself through
  * `registerBlock` with its host, which claims the host, so the walk leaves it alone: the block is
- * sent once, under its own params. Measured at the transport seam — every item the SDK posts —
- * because the double's accepted state stores a duplicate once and cannot show it.
+ * sent once, under its own params.
+ *
+ * Run against the API on an SDK test clone (spec CONF-2). That each block is sent once is a clause
+ * about what the SDK sends, which the API cannot show, since it stores a duplicate once: it is
+ * measured at the transport seam, every item the SDK posts. What the API accepted is read back
+ * from its catalog and a block's stored content: each block under its own id and phrases, the
+ * placeholders it was sent and never a value.
  */
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { act, createElement as el, lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LangsysApp, Phrase, Translate, createLocaleStore } from './index.js';
-import { startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
+import { anyBlock, startContractFixture, sleep, until, type ContractFixture } from './test-helpers/contract-fixture.js';
+import { everyText } from './test-helpers/contract-held.js';
+import seeds from './test-helpers/contract-seeds/nested-fallback.js';
+import type { World } from './test-helpers/contract-worlds.js';
 
 let fx: ContractFixture;
-const SEED = {
-    projects: [{ id: 'p1', base_locale: 'en', target_locales: ['es-es'], website_url: 'https://site.local' }],
-    keys: [{ key: 'k-writer', project: 'p1', type: 'write' }],
-};
+let w: World;
+
+/** What the API serves the project's key: everything it accepted. */
+const held_ = () => fx.held(w.key('k-writer'), w.project(), 'es-es');
 
 type Item = Record<string, unknown>;
 const sent: Item[] = [];
@@ -44,7 +52,8 @@ async function render(tree: ReactNode) {
 
 beforeAll(async () => {
     fx = await startContractFixture();
-    await fx.seed(SEED);
+    w = seeds.take('base');
+    await fx.use(w);
     for (const m of ['log', 'info', 'group', 'groupCollapsed', 'groupEnd', 'warn', 'error', 'debug'] as const) {
         consoleSpies.push(vi.spyOn(console, m).mockImplementation(() => {}));
     }
@@ -56,8 +65,8 @@ beforeAll(async () => {
         return realFetch(input, init);
     }) as typeof fetch;
     await LangsysApp.init({
-        projectid: 'p1',
-        key: 'k-writer',
+        projectid: w.project(),
+        key: w.key('k-writer'),
         UserLocaleStore: createLocaleStore('en'),
         baseLocale: 'en',
         apiUrl: fx.baseUrl,
@@ -89,12 +98,24 @@ describe('nested blocks register once', () => {
             sent.filter((i) => i.type === 'content_block' && (i.phrases as Array<{ phrase: string }>).some((p) => p.phrase === phrase));
         await until(() => blocksWith('Inner one').length > 0 && blocksWith('Outer text').length > 0);
         await sleep(1500);
-        process.stderr.write('ITEMS ' + JSON.stringify(sent.map((i) => [i.type, i.custom_id, (i.phrases as Array<{ phrase: string }> | undefined)?.map((p) => p.phrase) ?? i.phrase])) + '\n');
         expect({
             outer: blocksWith('Outer text').length,
             middle: blocksWith('Middle one').length,
             inner: blocksWith('Inner one').length,
         }).toEqual({ outer: 1, middle: 1, inner: 1 });
+        // The API accepted each block under its own id, with its own phrases: nothing is keyed on
+        // another block's, and the outer one holds only its own text.
+        const ids = (phrase: string) => blocksWith(phrase).map((b) => String(b.custom_id));
+        await until(async () => {
+            const held = await held_();
+            return ['Outer text', 'Middle one', 'Inner one'].every((p) => Object.values(held.blocks).some((blocks) => Object.entries(blocks).some(([id, ps]) => ids(p).includes(id) && ps.includes(p))));
+        });
+        const held = await held_();
+        const phrasesOf = (id: string) => Object.values(held.blocks).flatMap((blocks) => blocks[id] ?? []);
+        expect(phrasesOf(ids('Outer text')[0])).toContain('Outer text');
+        expect(phrasesOf(ids('Outer text')[0]).filter((p) => /^(Middle|Inner)/.test(p))).toEqual([]);
+        expect(phrasesOf(ids('Middle one')[0])).toEqual(['Middle one', 'Middle two']);
+        expect(phrasesOf(ids('Inner one')[0])).toEqual(['Inner one', 'Inner two']);
         await done();
     });
 
@@ -129,13 +150,23 @@ describe('nested blocks register once', () => {
         // which keeps a nested host's element and drops its children.
         expect(sent.filter((i) => JSON.stringify(i).includes('Ana'))).toEqual([]);
         // And they still show their own values after the enclosing walk.
+        // What the API holds for them: the placeholders, and no value anywhere in it.
+        await until(async () => everyText(await held_()).includes('Shared by {m0o}{name}{m0c}'));
+        const held = await held_();
+        expect(everyText(held)).toEqual(expect.arrayContaining(['Photo of {name}', 'Taken by {name}', 'In Lisbon', 'Shared by {m0o}{name}{m0c}']));
+        const stored = await fx.storedBlocks(w, w.key('k-writer'), 'es-es');
+        expect(JSON.stringify([held, stored])).not.toContain('Ana');
         expect(host.querySelector('img')?.getAttribute('alt')).toBe('Photo of Ana');
         expect(host.textContent).toContain('Taken by Ana');
         expect(host.textContent).toContain('Shared by Ana');
         await act(async () => root.unmount());
         host.remove();
-       }, 15_000);
+    });
 });
+
+/** Whether a block of the catalog holds `phrase`. */
+const anyBlockPhrase = (held: Awaited<ReturnType<typeof held_>>, phrase: string) =>
+    Object.values(held.blocks).some((blocks) => Object.values(blocks).some((phrases) => phrases.includes(phrase)));
 
 /** The content blocks sent so far that carry `phrase`. */
 const blocksWith = (phrase: string) =>
@@ -188,6 +219,9 @@ describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
         await sleep(1000);
         expect(blocksWith('Loading A')).toHaveLength(0);
         expect(blocksWith('Real A')).toHaveLength(1);
+        // The API holds the resolved content, the control, and not the placeholder.
+        expect(anyBlockPhrase(await held_(), 'Real A')).toBe(true);
+        expect(anyBlockPhrase(await held_(), 'Loading A')).toBe(false);
         expect(noticesWith(String(blocksWith('Real A')[0].custom_id))).toEqual([]);
         await done();
     });
@@ -201,6 +235,9 @@ describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
         await sleep(1000);
         expect(blocksWith('Intro B')).toHaveLength(1);
         expect(blocksWith('Loading B')).toHaveLength(1);
+        // The placeholder block is the one the API holds, registered once, under its own id.
+        await until(async () => anyBlockPhrase(await held_(), 'Loading B'));
+        expect(anyBlock(await held_())).toContain(String(blocksWith('Loading B')[0].custom_id));
         expect(noticesWith(String(blocksWith('Loading B')[0].custom_id))).toEqual([]);
         await done();
     });
@@ -216,6 +253,9 @@ describe('a Suspense placeholder on screen at mount (SRV-5)', () => {
         const before = String(blocksWith('Loading C')[0].custom_id);
         const after = String(blocksWith('Real C')[0].custom_id);
         expect(before).not.toBe(after);
+        // The API holds both: the placeholder stays registered, and the resolved content under its own id.
+        await until(async () => anyBlock(await held_()).includes(after));
+        expect(anyBlock(await held_())).toEqual(expect.arrayContaining([before, after]));
         expect(blocksWith('Loading C')).toHaveLength(1);
         expect(blocksWith('Real C')).toHaveLength(1);
         const notices = noticesWith('changed its structure after it settled');

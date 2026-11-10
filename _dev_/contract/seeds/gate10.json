@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000100-0001-4000-8000-000000000000",
+            "title": "react gate10 base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "130001|63c8a46c6abb81e2c5129ed5ea536d45719f6c92",
+                "device_id": "react-gate10-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000101-0001-4000-8000-000000000000",
+            "key": "react-gate10-1-k-writer",
+            "project": "78000100-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

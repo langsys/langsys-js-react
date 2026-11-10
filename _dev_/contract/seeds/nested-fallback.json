@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000500-0001-4000-8000-000000000000",
+            "title": "react nested-fallback base#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "132001|53c4b5524b2db70ed85a11f692194716763aaa58",
+                "device_id": "react-nested-fallback-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000501-0001-4000-8000-000000000000",
+            "key": "react-nested-fallback-1-k-writer",
+            "project": "78000500-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}
