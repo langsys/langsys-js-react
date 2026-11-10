@@ -120,3 +120,14 @@ reads `VITE_LANGSYS_BASE_URL`, `VITE_LANGSYS_KEY_READ`, `VITE_LANGSYS_KEY_IP_WRI
 
 `npm test` runs every rule this package implements against the same contract double, at the
 evidence level recorded in [CONFORMANCE.md](CONFORMANCE.md). `npm run typecheck` must be clean.
+
+### The documentation check (ICU-7)
+
+`src/docs-icu7.test.ts` runs with `npm test`, needs no network, and reads the README, the SSR
+guide, this guide, `_dev_/*.md`, `example/` and `example-next/`. Phrases in all of them are
+written flat (`You have {count} new messages`); the check fails on a `plural`, `select` or
+`selectordinal` argument anywhere in them. ICU may appear in three roles: what the catalog
+returns, what a legacy plural file converts into (MIG-4), and a counter-example marked `❌`
+beside the flat phrase that replaces it. Each such passage is named in the test's `EXEMPT` list
+with its role, so a new ICU example fails until someone decides it belongs there. The changelog
+is outside the check.
