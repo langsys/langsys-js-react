@@ -82,6 +82,13 @@ describe('LangsysApp surface', () => {
         expect(serverEntry.createLocaleStore).toBe(createLocaleStore);
     });
 
+    it('the server entry exports the same inCategory and isCategoryRef as the main entry', async () => {
+        const main = await import('./index.js');
+        expect(serverEntry.inCategory).toBe(main.inCategory);
+        expect(serverEntry.isCategoryRef).toBe(main.isCategoryRef);
+        expect(serverEntry.isCategoryRef(serverEntry.inCategory('Checkout', { previousCategory: 'Header' }))).toBe(true);
+    });
+
     it('members are identical references, not re-wrapped', () => {
         for (const m of publicSurface) {
             const a = (LangsysApp as unknown as Record<string, unknown>)[m];

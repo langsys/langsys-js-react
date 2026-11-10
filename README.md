@@ -223,8 +223,17 @@ t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
 - **Nothing to clean up on a schedule.** The previous category is sent once, on the registration the new code triggers. Once the catalog has the content under its new category, the option does nothing and you can delete it whenever convenient.
 - **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host says where the text came from, `data-ls-previous-contentblock` when it was filled from the old category's block and `data-ls-previous-category` when it was filled from the old category's phrase, so hydration renders the same text.
 - **A block with its own `custom_id` moves in place.** Its id names it whatever its category, so the API moves the block itself, and an older release still registering it under the old category moves it back. Move every use in one release.
-- **On a server entry** (`langsys-js-react/server`), import `inCategory` from `langsys-js-typescript`.
-- **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
+- **On a server entry** (`langsys-js-react/server`), import `inCategory` from there: it is the same function the main entry exports, and `langsys-js-typescript` is a dependency of this package, so importing it directly breaks under pnpm and Yarn PnP.
+- **A nested unit that names no category moves with its block.** A `<Phrase>` or `<Translate>` inside a `<Translate>` (or `<Phrase>`) that holds a component takes the block's `category` and its `previousCategory`, since it is part of the same content. Leave `category` off to inherit; `category=""` names no category and takes neither. A nested unit that names its own `category` takes neither, and moves only if it names its own `previousCategory`. One that names no category but a `previousCategory` of its own takes the block's category and its own previous one. A unit that is not inside a block names what its props say. Markup does the same: a host nested in a block takes the block's category and previous category unless it carries its own `data-ls-category`, and `data-ls-previous-category` beside it names its own previous category, the way the core stamps a host rendered from the previous category.
+
+```tsx
+<Translate category="Checkout" previousCategory="Header">
+    <p>Welcome, <UserName /></p>
+    <Phrase>Free shipping</Phrase>                          {/* Checkout, moved from Header */}
+    <Phrase category="Cart">Your cart</Phrase>               {/* Cart, no move */}
+    <Phrase category="Cart" previousCategory="Basket">Your cart</Phrase> {/* Cart, moved from Basket */}
+</Translate>
+```
 - **Needs base SDK `langsys-js-typescript@^0.7.3`**, which carries the move.
 
 ### `<Translate>` — HTML content blocks
