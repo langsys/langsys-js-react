@@ -434,6 +434,35 @@ describe('expressions that render nodes, not text', () => {
     });
 });
 
+describe('previousCategory (MOVE-1) on <Translate> and <Phrase>', () => {
+    it('the prop is left as written, the interpolation named, and a name in the prop is not taken', () => {
+        const { code, meta } = run(
+            IMPORT +
+                'const A = ({ user }) => <Translate category="Checkout" previousCategory="Header">Hello {user.name}</Translate>;\n' +
+                'const B = ({ n }) => <Phrase category="Checkout" previousCategory="">Based on {n} <b>reviews</b></Phrase>;',
+        );
+        expect(code).toContain('<Translate category="Checkout" previousCategory="Header" params={{ name: user.name }}>Hello %name%</Translate>');
+        expect(code).toContain('<Phrase category="Checkout" previousCategory="" params={{ n: n }}>Based on %n% <b>reviews</b></Phrase>');
+        expect(meta.warnings).toEqual([]);
+    });
+
+    it('a category and previous category written as expressions are left as written too', () => {
+        const { code } = run(
+            IMPORT + 'const A = ({ user, to, from }) => <Translate category={to} previousCategory={from}>Hello {user.name}</Translate>;',
+        );
+        expect(code).toContain('<Translate category={to} previousCategory={from} params={{ name: user.name }}>Hello %name%</Translate>');
+    });
+
+    it('a nested unit inside a moved block is transformed as a unit of its own', () => {
+        const { code } = run(
+            IMPORT +
+                'const A = ({ a, b }) => <Translate category="Checkout" previousCategory="Header"><Name />{a.title}<Phrase>Hi {b.name}</Phrase></Translate>;',
+        );
+        expect(code).toContain('<Phrase params={{ name: b.name }}>Hi %name%</Phrase>');
+        expect(code).toContain('previousCategory="Header" params={{ title: a.title }}');
+    });
+});
+
 describe('t() calls', () => {
     it('a template literal becomes a phrase with placeholders and params', () => {
         const { code } = run(IMPORT + 'function A({ items }) { const t = useT(); return t(`You have ${items.length} items`, "Cart"); }');
@@ -453,6 +482,24 @@ describe('t() calls', () => {
     it('an unnameable expression repeated in a template is two placeholders too', () => {
         const { code } = run(IMPORT + 'function A({ a, b }) { const t = useT(); return t(`${a + b} and ${a + b}`, "UI"); }');
         expect(code).toContain('t("{value} and {value_2}", "UI", { value: a + b, value_2: a + b })');
+    });
+
+    it('a category written as inCategory() (MOVE-1) stays where it is, and the params follow it', () => {
+        const { code } = run(
+            "import { inCategory, useT } from 'langsys-js-react';\n" +
+                "function A({ items }) { const t = useT(); return t(`You have ${items.length} items`, inCategory('Cart', { previousCategory: 'Header' })); }",
+        );
+        expect(code).toContain(
+            't("You have {items_count} items", inCategory(\'Cart\', { previousCategory: \'Header\' }), { items_count: items.length })',
+        );
+    });
+
+    it('inCategory() with params of the call’s own: merged, and the category is left alone', () => {
+        const { code } = run(
+            "import { inCategory, useT } from 'langsys-js-react';\n" +
+                "function A({ n, d }) { const t = useT(); return t(`${n} due`, inCategory('Cart', { previousCategory: '' }), { when: d }); }",
+        );
+        expect(code).toContain('t("{n} due", inCategory(\'Cart\', { previousCategory: \'\' }), { when: d, n: n })');
     });
 
     it('existing params are merged', () => {

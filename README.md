@@ -154,9 +154,39 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. Since base SDK 0.3.0, values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style (previously ISO 8601). Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically.
+Allowed value types: `string | number | Date | boolean`. Values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style. Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically. A number inside a translation's plural or gender form is the exception: see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat).
 
-> Future versions will swap the simple `{name}` runtime for full ICU MessageFormat — adding plural / select — without changing the public signature. Style-less ICU arguments (`{n, number}`, `{d, date}`, `{t, time}`) already format as of base SDK 0.3.0. Today's `t('{count} items', 'Cart', { count })` will evolve to `t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
+#### Plurals and gender: write the sentence flat
+
+**Never write ICU.** Write the sentence as it reads, with the count or the name as a `{placeholder}`, and pass the value as a param. Langsys makes each language's plural and gender forms, the base language included:
+
+```tsx
+t('You have {count} new messages', 'Inbox', { count });                                   // ✅
+t('{count, plural, one {# new message} other {# new messages}}', 'Inbox', { count });      // ❌ ICU written by hand
+```
+
+Langsys makes the forms once it has checked the phrase: a translation run checks its own phrases, and an hourly check covers any phrase a run missed. Until then the base language shows the sentence as written. The catalog holds the forms as ICU MessageFormat. Every request carries `X-Langsys-Capabilities: icu`, and `t()` renders the form the count selects with the CLDR plural rules of the loaded catalog's locale (Russian's four categories, Arabic's six). A plural or select renders its `other` branch when its argument isn't passed. Your code passes the same params in every language. A count and the noun it inflects belong in one phrase, or no plural form can reach the noun.
+
+A sentence that says something different at zero is its own phrase, chosen in code, and so is a sentence that differs in the source language itself:
+
+```tsx
+count === 0 ? t('Your inbox is empty.', 'Inbox') : t('You have {count} new messages', 'Inbox', { count });
+```
+
+In a language with grammatical gender, Langsys can turn a plain `{name}` into `{name_gender, select, …}` in the translation. Pass `name_gender` (`'female'`, `'male'` or `'other'`) beside `name` when you know it. `t()` types it as an optional param for every placeholder, `<Phrase params>` and `<Translate params>` take it as it is, and without it the neutral `other` form renders:
+
+```tsx
+t('{name} has been invited', 'Team', { name: 'Ana', name_gender: 'female' });
+```
+
+A plain `{n}` formats a number or a date, and nothing else needs writing. Inside a translation that carries a plural or gender form, the plural's own count (the `#`) is formatted and any other number renders as given (`1234.5`, not `1.234,5`), and so does the count where a translation writes `{count}` rather than `#`. Pass every number other than the count, and a time of day, as a string formatted with the loaded locale:
+
+```tsx
+const locale = useCurrentLocale() || 'en';   // '' until the first catalog loads, and Intl throws on ''
+const total = new Intl.NumberFormat(locale).format(amount);
+const at = new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date);
+t('{count} items, {total}, ready at {at}', 'Orders', { count, total, at });
+```
 
 #### Categorization disambiguates context
 
@@ -193,8 +223,17 @@ t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
 - **Nothing to clean up on a schedule.** The previous category is sent once, on the registration the new code triggers. Once the catalog has the content under its new category, the option does nothing and you can delete it whenever convenient.
 - **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host says where the text came from, `data-ls-previous-contentblock` when it was filled from the old category's block and `data-ls-previous-category` when it was filled from the old category's phrase, so hydration renders the same text.
 - **A block with its own `custom_id` moves in place.** Its id names it whatever its category, so the API moves the block itself, and an older release still registering it under the old category moves it back. Move every use in one release.
-- **On a server entry** (`langsys-js-react/server`), import `inCategory` from `langsys-js-typescript`.
-- **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
+- **On a server entry** (`langsys-js-react/server`), import `inCategory` from there: it is the same function the main entry exports, and `langsys-js-typescript` is a dependency of this package, so importing it directly breaks under pnpm and Yarn PnP.
+- **A nested unit that names no category moves with its block.** A `<Phrase>` or `<Translate>` inside a `<Translate>` (or `<Phrase>`) that holds a component takes the block's `category` and its `previousCategory`, since it is part of the same content. Leave `category` off to inherit; `category=""` names no category and takes neither. A nested unit that names its own `category` takes neither, and moves only if it names its own `previousCategory`. One that names no category but a `previousCategory` of its own takes the block's category and its own previous one. A unit that is not inside a block names what its props say. Markup does the same: a host nested in a block takes the block's category and previous category unless it carries its own `data-ls-category`, and `data-ls-previous-category` beside it names its own previous category, the way the core stamps a host rendered from the previous category.
+
+```tsx
+<Translate category="Checkout" previousCategory="Header">
+    <p>Welcome, <UserName /></p>
+    <Phrase>Free shipping</Phrase>                          {/* Checkout, moved from Header */}
+    <Phrase category="Cart">Your cart</Phrase>               {/* Cart, no move */}
+    <Phrase category="Cart" previousCategory="Basket">Your cart</Phrase> {/* Cart, moved from Basket */}
+</Translate>
+```
 - **Needs base SDK `langsys-js-typescript@^0.7.3`**, which carries the move.
 
 ### `<Translate>` — HTML content blocks
@@ -252,7 +291,7 @@ Without the transform, write the placeholder yourself as **`%key%`** and pass th
 </Translate>
 ```
 
-`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, and changing `params` re-renders the block.
+`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting (a number inside a plural or gender form is the exception, see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat)), and changing `params` re-renders the block.
 
 Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. In a `<Phrase>`, a value inside a part that is not translated, or inside notation such as `<math>`, doesn't count: the phrase's key leaves that part out, so the phrase still registers. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders. The transform leaves a conditional (`{signedIn ? name : 'guest'}`) as written, so one inside other text registers nothing either. Raw HTML is content, not a variable: a block whose only dynamic part is `dangerouslySetInnerHTML` (a CMS field, say) registers that HTML's text; one that also interpolates a value registers nothing.
 

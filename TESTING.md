@@ -155,4 +155,15 @@ through the API before it acts, and fails as `seed not landed` when the clone wa
 After editing a world in `src/test-helpers/contract-seeds`, write the JSON again with
 `npx vitest run --project unit src/seed-files.test.ts -u` and reseed.
 
+### The documentation check (ICU-7)
+
+`src/docs-icu7.test.ts` runs with `npm test`, needs no network, and reads the README, the SSR
+guide, this guide, `_dev_/*.md`, `example/` and `example-next/`. Phrases in all of them are
+written flat (`You have {count} new messages`); the check fails on a `plural`, `select` or
+`selectordinal` argument anywhere in them. ICU may appear in three roles: what the catalog
+returns, what a legacy plural file converts into (MIG-4), and a counter-example marked `❌`
+beside the flat phrase that replaces it. Each such passage is named in the test's `EXEMPT` list
+with its role, so a new ICU example fails until someone decides it belongs there. The changelog
+is outside the check.
+
 `npm run typecheck` must be clean.
