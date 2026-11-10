@@ -117,3 +117,26 @@ describe('a nested unit with only a previousCategory of its own, and the control
         expect(innerPhrase(r)?.previousCategory).toBeUndefined();
     });
 });
+
+describe('a marked host nested in a block, in markup (MOVE-4, MOVE-5)', () => {
+    const nested = (host: Record<string, string>) =>
+        el(
+            Translate,
+            { category: 'Checkout', previousCategory: 'Header' },
+            el('p', null, 'Outer text'),
+            el('div', { 'data-ls-phrase': '', ...host }, 'Inner host'),
+        );
+    const hostPhrase = (r: Awaited<ReturnType<typeof inScope>>) => r.phrases.find((p) => String(p.phrase).includes('Inner host'));
+
+    it('takes the block’s category and previous category; its own data-ls-category takes neither', async () => {
+        expect(hostPhrase(await inScope(() => nested({})))).toMatchObject({ category: 'Checkout', previousCategory: 'Header' });
+        const own = hostPhrase(await inScope(() => nested({ 'data-ls-category': 'Cart' })));
+        expect(own).toMatchObject({ category: 'Cart' });
+        expect(own?.previousCategory).toBeUndefined();
+    });
+
+    it('data-ls-previous-category beside its own data-ls-category is its own move', async () => {
+        const own = hostPhrase(await inScope(() => nested({ 'data-ls-category': 'Cart', 'data-ls-previous-category': 'Basket' })));
+        expect(own).toMatchObject({ category: 'Cart', previousCategory: 'Basket' });
+    });
+});
