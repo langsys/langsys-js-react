@@ -40,6 +40,11 @@ export { LangsysApp, createLocaleStore, type iLangsysInitConfig } from './app.js
 // reference, for a server that must catch it without loading the main entry.
 export { LangsysConfigurationError } from 'langsys-js-typescript';
 
+// Content moved to another category (MOVE-1), by reference as the main entry has it, so server code
+// imports `inCategory` from here: the core is a dependency of this package, not a peer, and importing
+// it directly breaks under pnpm / Yarn PnP.
+export { inCategory, isCategoryRef, type CategoryMoveOptions, type CategoryRef } from 'langsys-js-typescript';
+
 let storageInstalled = false;
 
 /**

@@ -14,6 +14,7 @@ import {
 import { hasRuntimeValues, toBlockNodes, toReactNodes, withNodeParams } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
+import { BlockCategory, useUnitCategory } from './unit-category.js';
 
 /**
  * Props for the React `Translate` component. Mirrors the Svelte component's
@@ -80,8 +81,8 @@ export interface TranslateProps {
  * reason that such a block was served as source.
  */
 export function Translate({
-    category = '',
-    previousCategory,
+    category: named,
+    previousCategory: namedPrevious,
     custom_id = '',
     label = '',
     params: given,
@@ -90,6 +91,10 @@ export function Translate({
     children: content,
     'data-ls-unnamed': unmarked,
 }: TranslateProps) {
+    // Inside a block that falls back, the block's category and previous category unless this unit
+    // names its own (MOVE-4).
+    const unit = useUnitCategory(named, namedPrevious);
+    const { category, previousCategory } = unit;
     // A param that is an element or a list renders in its place, not as text.
     const { children, params } = given ? withNodeParams(content, given) : { children: content, params: given };
     const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
@@ -178,10 +183,15 @@ export function Translate({
     // from the first render — on a server too (spec MARK-1). A list `withNodeParams` rebuilt from the
     // unit's own children goes back as separate children, as JSX passed them, so React does not check
     // it for keys as it would a list.
+    // The units inside it take its category and previous category (MOVE-4).
     return createElement(
         tag,
         { ref: hostRef, className, ...(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {}) },
-        ...(children !== content && Array.isArray(children) ? children : [children]),
+        createElement(
+            BlockCategory.Provider,
+            { value: unit },
+            ...(children !== content && Array.isArray(children) ? children : [children]),
+        ),
     );
 }
 

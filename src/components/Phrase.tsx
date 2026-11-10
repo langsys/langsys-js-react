@@ -14,6 +14,7 @@ import {
 import { hasRuntimeValues, toBlockNodes, toReactNodes, withNodeParams } from '../block-nodes.js';
 import { useT } from '../hooks.js';
 import { useSeedScopeRunner } from './LangsysProvider.js';
+import { BlockCategory, useUnitCategory } from './unit-category.js';
 
 /**
  * Props for the React `Phrase` component. Mirrors the Svelte component's props,
@@ -84,14 +85,18 @@ export interface PhraseProps {
  * subtree. For values React owns and re-renders, pass them through `params`.
  */
 export function Phrase({
-    category = '',
-    previousCategory,
+    category: named,
+    previousCategory: namedPrevious,
     params: given = {},
     tag = 'span',
     className,
     children: content,
     'data-ls-unnamed': unmarked,
 }: PhraseProps) {
+    // Inside a block that falls back, the block's category and previous category unless this unit
+    // names its own (MOVE-4).
+    const inherited = useUnitCategory(named, namedPrevious);
+    const { category, previousCategory } = inherited;
     // A param that is an element or a list renders in its place, not as text.
     const { children, params } = withNodeParams(content, given ?? {});
     const t = useT(); // changes with the locale, the catalog and a route change (HINT-13)
@@ -174,10 +179,15 @@ export function Phrase({
     }
     // A list `withNodeParams` rebuilt from the unit's own children goes back as separate children, as
     // JSX passed them, so React does not check it for keys as it would a list.
+    // The units inside it take its category and previous category (MOVE-4).
     return createElement(
         tag,
         { ref: hostRef, className, [PHRASE_MARKER_ATTR]: '' },
-        ...(children !== content && Array.isArray(children) ? children : [children]),
+        createElement(
+            BlockCategory.Provider,
+            { value: inherited },
+            ...(children !== content && Array.isArray(children) ? children : [children]),
+        ),
     );
 }
 
