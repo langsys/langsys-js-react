@@ -33,7 +33,7 @@ If you need the SDK outside React (a Node script, a non-React web app), import f
 npm install langsys-js-react
 ```
 
-`langsys-js-typescript` is installed automatically as a transitive dependency. `react` is a peer dependency you already have.
+`langsys-js-typescript` (`^0.7.3`) is installed automatically as a dependency. `react` is a peer dependency you already have.
 
 ## Creating a Langsys project
 
@@ -200,6 +200,32 @@ Different categories give the *same* phrase different translations:
 Without categorization, "Home" would only have one translation — which can't work for both contexts. Langsys's philosophy is *translate once, use everywhere*; categorize when the same phrase legitimately means different things.
 
 A good rule for category names: the module or feature the phrase lives in (`Account`, `Errors`, `Checkout`, `UI`).
+
+#### Moving content to another category
+
+The category is part of what identifies a phrase or block, so changing it registers the content as new, and it would be translated, and charged for, again. Name the category it was in before, and its translations follow it instead:
+
+```tsx
+import { inCategory, Phrase, Translate } from 'langsys-js-react';
+
+t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }));
+
+<Phrase category="Checkout" previousCategory="Header">Buy <b>now</b></Phrase>
+
+<Translate category="Checkout" previousCategory="Header">
+    <p>Free shipping on every order.</p>
+</Translate>
+```
+
+`t()`'s second argument is a category when it's a string and params when it's an object, so a move goes in the category position, wrapped by `inCategory()`. Use `previousCategory: ''` if the content had no category before.
+
+- **It moves every use.** Langsys keeps one item per text and category, so a move retires the old item for every call that registers that text in that category. Move them all in one release.
+- **Nothing to clean up on a schedule.** The previous category is sent once, on the registration the new code triggers. Once the catalog has the content under its new category, the option does nothing and you can delete it whenever convenient.
+- **No flash on the first deploy.** Until the catalog has the new category, the previous category's translation renders, and the host says where the text came from, `data-ls-previous-contentblock` when it was filled from the old category's block and `data-ls-previous-category` when it was filled from the old category's phrase, so hydration renders the same text.
+- **A block with its own `custom_id` moves in place.** Its id names it whatever its category, so the API moves the block itself, and an older release still registering it under the old category moves it back. Move every use in one release.
+- **On a server entry** (`langsys-js-react/server`), import `inCategory` from `langsys-js-typescript`.
+- **A nested `<Phrase>` or `<Translate>` takes nothing from the block around it.** Give it its own `category` and `previousCategory`.
+- **Needs base SDK `langsys-js-typescript@^0.7.3`**, which carries the move.
 
 ### `<Translate>` — HTML content blocks
 

@@ -1,13 +1,10 @@
 ## 0.7.0 - unreleased
 
-> Requires the base SDK release that carries ticket 838, which is **not yet
-> published** — it currently lives on `langsys-js-typescript`'s
-> `feature/838_write_key_gating_reland`. The range here still reads `^0.6.5`, so
-> this section does not describe a releasable state: bump the range to whatever
-> version ships 838 and re-verify against the registry tarball before releasing.
+> Requires the base SDK `langsys-js-typescript@^0.7.3`, which carries write gating (ticket 838), the move (`previousCategory`) and the VAR-3 marker reader this release's transform emits for.
 
 ### Added
 
+- **Moving content to another category (spec MOVE-1 to MOVE-5).** `<Translate>` and `<Phrase>` take `previousCategory`, and `inCategory`, `isCategoryRef`, `CategoryRef` and `CategoryMoveOptions` are re-exported for `t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))`. The binding only forwards it: the base SDK sends `previous_category` on the registration a miss triggers, keeps it out of `custom_id`, renders the previous category's translation until the new one is in the catalog, and stamps the host so hydration agrees. Verified against a local API: the four moved items came back with their own translations (`memory_translated: false`) and were not registered again after the refresh. Needs base SDK `^0.7.3`.
 - **Write gating (ticket 838).** Public keys are read-only; the server decides per session whether it may register content, and read-only sessions report the page URL only (never phrase content) so Langsys can visit and register from an allow-listed address.
   - **`useWriteEnabled()`** → `boolean | undefined`. Tri-state, and the states are distinct: `undefined` means authorization hasn't landed (and is the value throughout SSR), `false` means read-only, `true` means this session registers directly. Don't collapse it to a boolean or default `undefined` to `false`.
   - **`setWriteGrant(grant)`** → `Promise<void>`, also on `LangsysApp`. For login-walled apps: supply a short-lived JWT after `init()` and the session is re-authorized with an `X-Write-Grant` header. It re-authorizes rather than only storing the token.
