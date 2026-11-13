@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000a00-0001-4000-8000-000000000000",
+            "title": "react ref1-lists lists#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "134501|4ecbc86d2e79194757196e03e308e492f930972e",
+                "device_id": "react-ref1-lists-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000a01-0001-4000-8000-000000000000",
+            "key": "react-ref1-lists-1-k1",
+            "project": "78000a00-0001-4000-8000-000000000000",
+            "type": "read"
+        }
+    ]
+}

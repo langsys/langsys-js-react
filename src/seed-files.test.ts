@@ -5,9 +5,12 @@ import gate10 from './test-helpers/contract-seeds/gate10.js';
 import hint13 from './test-helpers/contract-seeds/hint13.js';
 import localeSwitch from './test-helpers/contract-seeds/locale-switch.js';
 import playground from './test-helpers/contract-seeds/playground.js';
+import ref1 from './test-helpers/contract-seeds/ref1-lists.js';
 import mig from './test-helpers/contract-seeds/mig-passthrough.js';
 import nested from './test-helpers/contract-seeds/nested-fallback.js';
 import handoff from './test-helpers/contract-seeds/seed-handoff.js';
+import srv2 from './test-helpers/contract-seeds/srv2-credentials.js';
+import srv7 from './test-helpers/contract-seeds/srv7-served-block.js';
 import transform from './test-helpers/contract-seeds/transform.js';
 import var7 from './test-helpers/contract-seeds/var7-unregistered.js';
 import { renderSeedFile, seedFile, type SeedFile } from './test-helpers/contract-worlds.js';
@@ -27,7 +30,10 @@ const FILES: Record<string, SeedFile<string>> = {
     'mig-passthrough': mig,
     'nested-fallback': nested,
     playground,
+    'ref1-lists': ref1,
     'seed-handoff': handoff,
+    'srv2-credentials': srv2,
+    'srv7-served-block': srv7,
     transform,
     'var7-unregistered': var7,
 };

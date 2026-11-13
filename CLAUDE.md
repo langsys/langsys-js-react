@@ -91,8 +91,8 @@ requireCredentials           // init option, inherited (WIRE-4): unconfigured cl
 LangsysApp.isConfigured()    // core's, by reference; LangsysConfigurationError re-exported by reference from both entries
 
 // Server entry — langsys-js-react/server (node-only; imports node:async_hooks)
-renderInRequestScope({locale, catalog?, url?}, render) -> { result, seed, close }  // one request, one core scope
-LangsysApp, createLocaleStore  // the main entry's, from app.ts: loads no React, so a Server Component calls init() here; a scope fetches with init()'s project and key
+renderInRequestScope({locale, catalog?, url?, credentials?}, render) -> { result, seed, close }  // one request, one core scope; credentials: {projectid, key} sends under that project (SRV-2)
+LangsysApp, createLocaleStore  // the main entry's, from app.ts: loads no React, so a Server Component calls init() here; a scope fetches with init()'s project and key unless given credentials
 installRequestScopeStorage()  // AsyncLocalStorage for the core; then createRequestScope + scope.enter() where a render can't be wrapped
 createRequestScope, currentRequestScope, setRequestScopeStorage, clearSharedCatalogs  // core, by reference
 

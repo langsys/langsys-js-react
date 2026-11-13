@@ -41,8 +41,8 @@ app.get('*', async (req, res) => {
 });
 ```
 
-- `LangsysApp.init()` in the server process supplies the project and key a scope fetches its catalog with. Without it, a scope not given `catalog` renders source text.
-- `renderInRequestScope({ locale, catalog?, url? }, render)` opens a scope, runs `render` inside it and resolves once it has finished. The scope fetches the locale's catalog at most once per request, shared read-only with other requests rendering the same locale; pass `catalog` when you already have it (from a snapshot or your own fetch).
+- `LangsysApp.init()` in the server process supplies the project and key a scope fetches its catalog with and sends its misses under. A scope given `credentials: { projectid, key }` uses those instead, so one process can render for several projects: two scopes never share a credential, however their requests interleave. Without either, a scope not given `catalog` renders source text.
+- `renderInRequestScope({ locale, catalog?, url?, credentials? }, render)` opens a scope, runs `render` inside it and resolves once it has finished. The scope fetches the locale's catalog at most once per request, shared read-only with other requests rendering the same locale under the same credentials; pass `catalog` when you already have it (from a snapshot or your own fetch).
 - Inside the render, `useT()` and `LangsysApp.t` read this request's catalog.
 - `seed` is `{ locale, catalog, blocks, phrases }`: the catalog this request rendered with, the content blocks it served, and the misses it collected.
 - `close()` runs after the response has been sent. What it does with the misses is set by `ssrTokenStrategy` (below). It never throws, and calling it again returns the first result.

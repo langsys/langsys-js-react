@@ -1,0 +1,25 @@
+{
+    "projects": [
+        {
+            "id": "78000c00-0001-4000-8000-000000000000",
+            "title": "react srv7-served-block served#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "user": {
+                "token": "135501|6a093c7087e4d35a23e9d849cc8260e371fc98a7",
+                "device_id": "react-srv7-served-block-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000c01-0001-4000-8000-000000000000",
+            "key": "react-srv7-served-block-1-k-writer",
+            "project": "78000c00-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}
