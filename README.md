@@ -154,7 +154,7 @@ t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. Values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style. Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically. A number inside a translation's plural or gender form is the exception: see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat).
+Allowed value types: `string | number | Date | boolean`. Values are locale-formatted: numbers go through `Intl.NumberFormat` (`1234.5` → `1.234,5` in `de-DE`) and `Date` values through `Intl.DateTimeFormat` with the medium date style. Pass a string to opt out of formatting. Formatting always uses the catalog locale (falling back to `en`), never the host's default locale, so server and client render identically. The same holds inside a translation's plural or gender form.
 
 #### Plurals and gender: write the sentence flat
 
@@ -179,11 +179,11 @@ In a language with grammatical gender, Langsys can turn a plain `{name}` into `{
 t('{name} has been invited', 'Team', { name: 'Ana', name_gender: 'female' });
 ```
 
-A plain `{n}` formats a number or a date, and nothing else needs writing. Inside a translation that carries a plural or gender form, the plural's own count (the `#`) is formatted and any other number renders as given (`1234.5`, not `1.234,5`), and so does the count where a translation writes `{count}` rather than `#`. Pass every number other than the count, and a time of day, as a string formatted with the loaded locale:
+A plain `{n}` formats a number or a date, and nothing else needs writing. That holds inside a translation that carries a plural or gender form too: the count, written `#` or `{count}`, and every other number format for the loaded catalog's locale. A value passed as a string is written as given, so pass a time of day, or a number in a format of your own, as a string formatted with the loaded locale:
 
 ```tsx
 const locale = useCurrentLocale() || 'en';   // '' until the first catalog loads, and Intl throws on ''
-const total = new Intl.NumberFormat(locale).format(amount);
+const total = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(amount);
 const at = new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date);
 t('{count} items, {total}, ready at {at}', 'Orders', { count, total, at });
 ```
@@ -291,7 +291,7 @@ Without the transform, write the placeholder yourself as **`%key%`** and pass th
 </Translate>
 ```
 
-`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting (a number inside a plural or gender form is the exception, see [Plurals and gender](#plurals-and-gender-write-the-sentence-flat)), and changing `params` re-renders the block.
+`%key%` passes through JSX as plain text and the SDK reads it as `{key}`; keys are identifier-shaped (`%[A-Za-z_][A-Za-z0-9_]*%`), so a stray `%` in prose ("50% off") is left alone. `params` apply to text, translatable attributes, `<option>` text and single-token content; numbers and dates get the locale's formatting, inside a plural or gender form too, and changing `params` re-renders the block.
 
 Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. In a `<Phrase>`, a value inside a part that is not translated, or inside notation such as `<math>`, doesn't count: the phrase's key leaves that part out, so the phrase still registers. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders. The transform leaves a conditional (`{signedIn ? name : 'guest'}`) as written, so one inside other text registers nothing either. Raw HTML is content, not a variable: a block whose only dynamic part is `dangerouslySetInnerHTML` (a CMS field, say) registers that HTML's text; one that also interpolates a value registers nothing.
 

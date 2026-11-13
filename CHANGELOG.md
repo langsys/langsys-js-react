@@ -1,6 +1,6 @@
 ## 0.7.0 - unreleased
 
-> Requires the base SDK `langsys-js-typescript@^0.7.4`, which carries write gating (ticket 838), the move (`previousCategory`), the previous messages category (`messagesPreviousCategory`), `<plaintext>` among the elements that are never translated, and the VAR-3 marker reader this release's transform emits for.
+> Requires the base SDK `langsys-js-typescript@^0.7.4`, which carries write gating (ticket 838), the move (`previousCategory`), the previous messages category (`messagesPreviousCategory`), `<plaintext>` among the elements that are never translated, numbers formatted for the locale inside a translation's plural or gender form, and the VAR-3 marker reader this release's transform emits for.
 
 ### Added
 
