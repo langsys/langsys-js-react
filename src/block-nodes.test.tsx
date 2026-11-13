@@ -126,7 +126,7 @@ describe('<DontTranslate> in a unit', () => {
     });
 
     it('in a phrase, code and notation the core shows as written are not read either', () => {
-        for (const tag of ['math', 'script', 'style', 'template', 'noscript']) {
+        for (const tag of ['math', 'script', 'style', 'template', 'noscript', 'plaintext']) {
             expect(hasRuntimeValues(['Total ', el(tag, null, 'n = ', 3)], true)).toBe(false);
             expect(hasRuntimeValues(['Total ', el(tag, null, 'n = ', 3)])).toBe(true);
         }

@@ -29,8 +29,8 @@
  * can stand — inside MathML and SVG an HTML `<span>` draws nothing, and `<textarea>`, `<title>` and
  * `<option>` hold text only — a value in such a subtree is left as written, and a `<Translate>`,
  * which would store it, gets `data-ls-unnamed` and registers nothing (VAR-7); a `<Phrase>` keys the
- * subtree as one empty pair. `<script>` and `<style>` hold raw text, which a block stores as
- * written and a phrase keys as one empty pair: a value there is left as written, and a `<Translate>`
+ * subtree as one empty pair. `<script>`, `<style>` and `<plaintext>` hold raw text, which a block
+ * stores as written and a phrase keys as one empty pair: a value there is left as written, and a `<Translate>`
  * holding one gets `data-ls-unnamed`.
  *
  *   <Translate>Signed in as <DontTranslate>{user.email}</DontTranslate></Translate>
@@ -88,8 +88,11 @@ import { nameAll, type Named } from './naming.js';
 const SOURCE = 'langsys-js-react';
 const TARGETS = new Set(['Translate', 'Phrase']);
 const VERBATIM = 'DontTranslate';
-/** Elements whose content is raw text, which a block stores as written: a value there is left as written. */
-const RAW_TEXT = new Set(['script', 'style']);
+/**
+ * Elements whose content is raw text, which a block stores as written: a value there is left as
+ * written. A parser reads everything after a `<plaintext>` start tag as text, to the end of the input.
+ */
+const RAW_TEXT = new Set(['script', 'style', 'plaintext']);
 /** Elements that hold text only, where a marker element is not drawn or not allowed. */
 const TEXT_ONLY = new Set(['textarea', 'title', 'option']);
 /**

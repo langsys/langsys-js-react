@@ -197,6 +197,19 @@ describe('a value in a subtree that is not translated', () => {
         expect(code).not.toContain('params');
     });
 
+    // A parser reads everything after a <plaintext> start tag as text, to the end of the input, so a
+    // marker there would show as written markup: it is raw text, as script and style are (TOK-1).
+    it('inside <plaintext> a value is left as written, and a <Translate> holding one registers nothing', () => {
+        const { code } = run(
+            DNT +
+                'const A = ({ p }) => <Translate>Before <plaintext>{p}</plaintext></Translate>;\n' +
+                'const B = ({ p, n }) => <Phrase>Before {n} <plaintext>{p}</plaintext></Phrase>;',
+        );
+        expect(code).toContain('<Translate data-ls-unnamed="">Before <plaintext>{p}</plaintext></Translate>');
+        expect(code).toContain('>Before %n% <plaintext>{p}</plaintext></Phrase>');
+        expect(code).not.toContain('data-ls-param');
+    });
+
     // An HTML <span> inside MathML or SVG is created in that namespace and draws nothing, so a value
     // there is left as written; a <Translate> would store it in its content, so it registers
     // nothing (VAR-7). A <Phrase> keys code and notation as one empty pair and stores no content.
