@@ -202,6 +202,18 @@ describe('a param React renders as nodes', () => {
         expect(text.params).toEqual({ who: '', tags: false });
     });
 
+    // The value itself, not its text: React writes it as it writes any value of its type, so a
+    // function in an attribute is left out, where its text would put its source in the page.
+    it('a prop that is exactly one placeholder is written as React writes the value itself', () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const out = withNodeParams(el('img', { alt: '%cb%', title: 'x' }), { cb: () => 'source text' });
+            expect(html(out.children)).toBe('<div><img title="x"/></div>');
+        } finally {
+            error.mockRestore();
+        }
+    });
+
     // An attribute's text is a string: a node value there fills its placeholder as JavaScript writes
     // the value into a string, the param the core fills the attribute with.
     it("a node value in an attribute's text fills it as JavaScript writes it into a string", () => {
