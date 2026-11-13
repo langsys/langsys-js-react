@@ -22,8 +22,14 @@ import { isTranslationExcluded, type BlockNode, type RenderedNode } from 'langsy
 import { NON_TRANSLATABLE_ELEMENTS } from 'langsys-js-typescript/pure';
 import { DontTranslate, type DontTranslateProps } from './components/DontTranslate.js';
 
+/**
+ * `portals` are those at the unit's own level, which the component renders beside the translated
+ * nodes; `nested[i]` holds the ones `elements[i]` held, which `toReactNodes` puts back as that
+ * element's children, so React's tree, along which a portal's events bubble and context reaches
+ * it, keeps the portal under the element that held it.
+ */
 export type Mapped =
-    | { ok: true; nodes: BlockNode[]; elements: ReactElement[]; portals: ReactPortal[] }
+    | { ok: true; nodes: BlockNode[]; elements: ReactElement[]; portals: ReactPortal[]; nested: ReactPortal[][] }
     | { ok: false; reason: string };
 
 const PORTAL = Symbol.for('react.portal');
@@ -106,10 +112,11 @@ function isPortal(node: unknown): node is ReactPortal {
 export function toBlockNodes(children: ReactNode): Mapped {
     const elements: ReactElement[] = [];
     const portals: ReactPortal[] = [];
+    const nested: ReactPortal[][] = [];
     let failure: string | undefined;
 
-    /** Flatten one level of React children into nodes, numbering elements in document order. */
-    function mapLevel(level: ReactNode): BlockNode[] {
+    /** Flatten one level of React children into nodes, numbering elements in document order; `parent` is the index of the element holding it. */
+    function mapLevel(level: ReactNode, parent: number | null): BlockNode[] {
         const out: BlockNode[] = [];
         const visit = (node: ReactNode): void => {
             if (failure || node === null || node === undefined || typeof node === 'boolean') return;
@@ -119,7 +126,8 @@ export function toBlockNodes(children: ReactNode): Mapped {
             }
             if (Array.isArray(node)) return node.forEach(visit);
             if (isPortal(node)) {
-                portals.push(node);
+                if (parent === null) portals.push(node);
+                else nested[parent].push(node);
                 return;
             }
             if (!isValidElement(node)) {
@@ -136,8 +144,9 @@ export function toBlockNodes(children: ReactNode): Mapped {
                 failure = 'dangerouslySetInnerHTML, an HTML string rather than a tree';
                 return;
             }
-            elements.push(node);
-            const kids = mapLevel(props.children as ReactNode);
+            const index = elements.push(node) - 1;
+            nested[index] = [];
+            const kids = mapLevel(props.children as ReactNode, index);
             const attrs = attrsOf(props);
             out.push({ tag: node.type, ...(attrs ? { attrs } : {}), ...(kids.length ? { children: kids } : {}) });
         };
@@ -145,8 +154,8 @@ export function toBlockNodes(children: ReactNode): Mapped {
         return out;
     }
 
-    const nodes = mapLevel(children);
-    return failure ? { ok: false, reason: failure } : { ok: true, nodes, elements, portals };
+    const nodes = mapLevel(children, null);
+    return failure ? { ok: false, reason: failure } : { ok: true, nodes, elements, portals, nested };
 }
 
 /** DOM attribute names back to React prop names, for the ones that differ. */
@@ -168,10 +177,14 @@ function propFor(attr: string, props: Record<string, unknown>): string {
 /**
  * A rendered block back to React: each element is the original React element it renders
  * (`elements[source]`), cloned so its handlers, refs and key survive, with the attributes the
- * translation changed or the core added set on it, and its translated children. Comments are
- * another host's markers and render nothing here.
+ * translation changed or the core added set on it, and its translated children, then the portals
+ * it held (`nested`). Comments are another host's markers and render nothing here.
  */
-export function toReactNodes(nodes: readonly RenderedNode[], elements: readonly ReactElement[]): ReactNode[] {
+export function toReactNodes(
+    nodes: readonly RenderedNode[],
+    elements: readonly ReactElement[],
+    nested: ReadonlyArray<readonly ReactPortal[] | undefined> = [],
+): ReactNode[] {
     return nodes.flatMap((node): ReactNode[] => {
         if ('text' in node) return [node.text];
         if ('comment' in node) return [];
@@ -184,7 +197,7 @@ export function toReactNodes(nodes: readonly RenderedNode[], elements: readonly 
             // Compared as `attrsOf` handed it over, so a boolean prop (`disabled`, sent as `''`) stays the prop it is.
             if ((attrValue(originalProps[prop]) ?? '') !== value) changed[prop] = value;
         }
-        const kids = toReactNodes(node.children, elements);
+        const kids = [...toReactNodes(node.children, elements, nested), ...(nested[node.source] ?? [])];
         return [kids.length ? cloneElement(original, changed, ...kids) : cloneElement(original, { ...changed, children: undefined } as Partial<unknown>)];
     });
 }

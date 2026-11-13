@@ -17,6 +17,7 @@ export default function langsysLoader(this: LoaderContext, source: string, map?:
         (out) => {
             if (!out) return done(null, source, map);
             for (const w of out.warnings) this.emitWarning?.(new Error(w));
+            if (out.code === null) return done(null, source, map);
             done(null, out.code, out.map ?? undefined);
         },
         (err: Error) => done(err),

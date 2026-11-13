@@ -520,6 +520,43 @@ describe('t() calls', () => {
         expect(code).toContain('t("{n} due", "UI", { when: d, n: n })');
     });
 
+    // The core reads params from the second argument when it is an object other than an
+    // inCategory() ref, and then ignores the third: the values join the params where they are.
+    it('params written second are merged there, where the core reads them', () => {
+        const { code } = run(IMPORT + 'function A({ items, d }) { const t = useT(); return t(`You have ${items.length} items`, { when: d }); }');
+        expect(code).toContain('t("You have {items_count} items", { when: d, items_count: items.length })');
+        const empty = run(IMPORT + 'function A({ n }) { const t = useT(); return t(`${n} new`, {}); }');
+        expect(empty.code).toContain('t("{n} new", { n: n })');
+    });
+
+    it('a name the second argument passes is taken, so the value gets another', () => {
+        const { code } = run(IMPORT + 'function A({ n, c }) { const t = useT(); return t(`${n} new, {n} old`, { n: c }); }');
+        const m = /t\("\{(\w+)\} new, \{n\} old", \{ n: c, (\w+): n \}\)/.exec(code);
+        expect(m, code).not.toBeNull();
+        expect(m![1]).toBe(m![2]);
+        expect(m![1]).not.toBe('n');
+    });
+
+    it('null second, which the core reads as params, becomes the params', () => {
+        const { code } = run(IMPORT + 'function A({ n }) { const t = useT(); return t(`${n} new`, null); }');
+        expect(code).toContain('t("{n} new", { n: n })');
+    });
+
+    // Neither a category nor params the build can see: the call hands the core the shape it reads
+    // for the value the argument turns out to hold.
+    it('a second argument the build cannot classify is classified when the call runs', async () => {
+        const { inCategory } = await import('langsys-js-typescript');
+        const { code } = run(IMPORT + 'export function A(second, n) { const t = useT(); return t(`${n} new`, second); }');
+        const body = code.replace(/import [^;]*;/, '').replace('export function', 'function');
+        const A = new Function('useT', `${body}\nreturn A;`)(() => (...args: unknown[]) => args) as (second: unknown, n: number) => unknown[];
+        const ref = inCategory('Cart', { previousCategory: 'Header' });
+        expect(A('Cart', 3)).toEqual(['{n} new', 'Cart', { n: 3 }]);
+        expect(A(ref, 3)).toEqual(['{n} new', ref, { n: 3 }]);
+        expect(A(undefined, 3)).toEqual(['{n} new', undefined, { n: 3 }]);
+        expect(A({ when: 'today' }, 3)).toEqual(['{n} new', { when: 'today', n: 3 }]);
+        expect(A(null, 3)).toEqual(['{n} new', { n: 3 }]);
+    });
+
     it('a plain phrase is untouched', () => {
         const { code, meta } = run(IMPORT + "function A() { const t = useT(); return t('Hello {name}', 'UI', { name: 'x' }); }");
         expect(code).toContain("t('Hello {name}', 'UI', { name: 'x' })");
@@ -752,5 +789,51 @@ describe('every shared naming vector, through the transform', () => {
                 : null,
         );
         expect(keys).toEqual(unique(c.names));
+    });
+});
+
+// The Vite plugin and the Next loader parse any file that mentions the package, so they take the
+// syntax the app's own compiler takes, and never fail a build the app's compiler would pass.
+describe('the Vite plugin and the Next loader, on the syntax an app compiles', () => {
+    const unit = "const A = ({ n }) => <Translate>Hello {n}</Translate>;\n";
+
+    it('decorated classes, in every form TypeScript and the decorators proposal write, are transformed and keep their decorators', async () => {
+        const sources = {
+            field: 'class S { @observable x = 1 }',
+            accessor: 'class S { @observable accessor x = 1 }',
+            parameter: 'class S { constructor(@Inject() x: number) {} }',
+            'before export': '@injectable() export class S {}',
+            'after export': 'export @injectable() class S {}',
+        };
+        for (const [form, decorated] of Object.entries(sources)) {
+            const out = await transformSource(IMPORT + decorated + '\n' + unit, '/app/store.tsx', false);
+            expect(out?.code, form).toContain('<Translate params={{');
+            expect(out?.code, form).toContain(decorated.match(/@\w+(\(\))?/)![0]);
+        }
+    });
+
+    it('a Flow-typed .js file is transformed', async () => {
+        const out = await transformSource(IMPORT + 'function f(x: number): string { return String(x); }\n' + unit, '/app/flow.js', false);
+        expect(out?.code).toContain('<Translate params={{');
+    });
+
+    it('a file Babel cannot parse is left as written, with a warning, and the build goes on', async () => {
+        const broken = IMPORT + 'class {\n' + unit;
+        const out = await transformSource(broken, '/app/broken.tsx', false);
+        expect(out?.code).toBeNull();
+        expect(out?.warnings).toEqual([expect.stringMatching(/^langsys: \/app\/broken\.tsx — Babel could not parse it .*, so it is left as written/)]);
+
+        const { default: vite } = await import('./vite.js');
+        const warned: string[] = [];
+        await expect(vite().transform.call({ warn: (m: string) => warned.push(m) }, broken, '/app/broken.tsx')).resolves.toBeNull();
+        expect(warned).toHaveLength(1);
+
+        const { default: loader } = await import('../next-loader.js');
+        const emitted: Error[] = [];
+        const passed = await new Promise<unknown[]>((done) =>
+            loader.call({ resourcePath: '/app/broken.tsx', async: () => (...args: unknown[]) => done(args), emitWarning: (e: Error) => emitted.push(e) }, broken),
+        );
+        expect(passed).toEqual([null, broken, undefined]);
+        expect(emitted).toHaveLength(1);
     });
 });

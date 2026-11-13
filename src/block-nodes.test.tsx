@@ -51,14 +51,18 @@ describe('toBlockNodes', () => {
         expect((r.elements[2].props as { onClick: unknown }).onClick).toBe(onClick);
     });
 
-    it('a portal is kept for rendering and excluded from the nodes', () => {
+    it('a portal is kept for rendering, with the element that holds it, and excluded from the nodes', () => {
         const target = { nodeType: 1 } as unknown as Element;
         const portal = createPortal(el('div', null, 'Dialog'), target);
         const r = toBlockNodes(el('p', null, 'Body ', portal));
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         expect(r.nodes).toEqual([{ tag: 'p', children: [{ text: 'Body ' }] }]);
-        expect(r.portals).toEqual([portal]);
+        expect(r.portals).toEqual([]);
+        expect(r.nested[0]).toEqual([portal]);
+
+        const top = toBlockNodes(['Body ', portal]);
+        expect(top.ok && top.portals).toEqual([portal]);
     });
 
     it.each([

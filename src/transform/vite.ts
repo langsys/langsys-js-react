@@ -30,7 +30,7 @@ export default function langsys(): LangsysVitePlugin {
             const out = await transformSource(code, id);
             if (!out) return null;
             for (const w of out.warnings) this.warn(w);
-            return { code: out.code, map: out.map };
+            return out.code === null ? null : { code: out.code, map: out.map };
         },
     };
 }

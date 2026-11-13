@@ -99,9 +99,9 @@ export default withLangsys({ /* your config */ });
 ```
 
 ```tsx
-// app/langsys-client.tsx — this package ships no 'use client' directive, so re-export through one
+// app/langsys-client.tsx — this package ships no 'use client' directive, so re-export the provider through one
 'use client';
-export { LangsysProvider, Translate, Phrase, DontTranslate } from 'langsys-js-react';
+export { LangsysProvider } from 'langsys-js-react';
 ```
 
 ```tsx
@@ -134,6 +134,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 ```
 
 The layout imports `LangsysApp` and `createLocaleStore` from `langsys-js-react/server`, which loads no React, so a server component can call `init()`. It runs when a request first renders the layout, not when the module loads.
+
+Use the hooks, `<Translate>`, `<Phrase>` and `<DontTranslate>` in Client Components (files that start with `'use client'`), imported from `langsys-js-react` itself, as `example-next/app/Client.tsx` does; a Server Component renders them through a Client Component of yours. The build transform makes values placeholders only in units imported from the package, so a unit taken through a re-export of your own is left as written ([Variables in translated text](./README.md#variables-in-translated-text)).
 
 Under the provider, `useT()`, `useCurrentLocale()`, `useTranslations()`, `<Translate>` and `<Phrase>` render the request's locale and catalog on the server, and the browser hydrates from the same catalog, so the first client render matches the served HTML. Initialize the SDK in the browser as usual (`LangsysApp.init()` in a Client Component's `useEffect`); the provider has already seeded it with the request's catalog.
 

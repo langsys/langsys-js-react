@@ -55,9 +55,9 @@ export { currentlyLoadedLocale, createSignal, sTranslations, tSignal as t } from
 //
 // The three signals above CAN hold a value during a server render — the core's
 // synchronous `seedCatalog()` puts a catalog in place before rendering — so
-// reading them raw is a legitimate advanced use. (Not "safe" without caveat:
-// they are process-global, so concurrent requests in different locales share
-// them — spec SRV-2, recorded not implemented in CONFORMANCE.md.)
+// reading them raw is a legitimate advanced use. (Read inside a request scope
+// they give that request's catalog and locale, so concurrent requests never
+// share them — the core's scope-awareness, spec SRV-2; outside one, the page's.)
 // `writeEnabled` differs in kind, not degree — it is browser-authoritative and
 // *defined* as `undefined` for the whole of a server render, so no seed exists.
 // `useWriteEnabled()` exists to adapt exactly that, pinning `getServerSnapshot` so the server can never emit

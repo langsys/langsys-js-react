@@ -9,6 +9,7 @@
  *   on a server it is served as its source with its explicit id, and the core notices it once.
  */
 import { Suspense, act, createContext, createElement as el, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -408,5 +409,37 @@ describe('a block the tree path cannot render', () => {
         } as never).catch(() => {});
         const messages = notice.mock.calls.map((c) => c.join(' ')).filter((m) => m.includes('was served as source'));
         expect(messages).toHaveLength(1);
+    });
+});
+
+describe('a portal inside a unit', () => {
+    // React bubbles a portal's events, and passes context, along the React tree: the portal's
+    // parent is the element that holds it, wherever its DOM renders.
+    it('stays a child of the element that holds it, so its events bubble there, in both components', async () => {
+        const onMenuKey = vi.fn();
+        const onLabelKey = vi.fn();
+        const target = document.createElement('div');
+        document.body.appendChild(target);
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        await act(async () =>
+            root.render(
+                el(
+                    'div',
+                    null,
+                    el(Translate, { category: 'UI' }, el('div', { onKeyDown: onMenuKey }, 'Menu ', createPortal(el('input', { id: 'in-block' }), target))),
+                    el(Phrase, { category: 'UI' }, 'Open ', el('b', { onKeyDown: onLabelKey }, 'menu', createPortal(el('input', { id: 'in-phrase' }), target))),
+                ),
+            ),
+        );
+        expect(target.querySelectorAll('input')).toHaveLength(2);
+        await act(async () => {
+            target.querySelector('#in-block')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+            target.querySelector('#in-phrase')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+        });
+        expect(onMenuKey).toHaveBeenCalledTimes(1);
+        expect(onLabelKey).toHaveBeenCalledTimes(1);
+        await act(async () => root.unmount());
     });
 });

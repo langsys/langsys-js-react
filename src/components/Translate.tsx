@@ -142,9 +142,10 @@ export function Translate({
     useEffect(() => {
         register(hostRef.current ?? undefined);
         // Registration is one-shot per call: it runs again whenever `t` changes (a locale, a
-        // catalog or a route change) or the block's identity does.
+        // catalog or a route change), the block's identity does, or a new `tag` replaces the host,
+        // which only this call can claim.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [t, blockKey]);
+    }, [t, blockKey, tag]);
 
     // Unmappable content only: the core's DOM class walks and translates it after mount.
     useEffect(() => {
@@ -164,8 +165,9 @@ export function Translate({
             instance.destroy();
             instanceRef.current = undefined;
         };
+        // A new `tag` replaces the host element, so the instance moves to the new one.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapped.ok, category, previousCategory, custom_id, label]);
+    }, [mapped.ok, category, previousCategory, custom_id, label, tag]);
 
     useEffect(() => {
         instanceRef.current?.setParams(params);
@@ -175,7 +177,7 @@ export function Translate({
         return createElement(
             tag,
             { ref: hostRef, className, ...rendered.hostAttrs },
-            ...toReactNodes(rendered.nodes, mapped.elements),
+            ...toReactNodes(rendered.nodes, mapped.elements, mapped.nested),
             ...mapped.portals,
         );
     }

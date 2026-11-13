@@ -705,18 +705,68 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
     const isKeyShaped = (parts: Array<string | t.Expression>): boolean =>
         parts.every((p) => typeof p !== 'string' || /^[A-Za-z0-9_.:-]*$/.test(p));
 
+    /**
+     * What the core reads `t()`'s second argument as (MOVE-1's position rule): a category when it
+     * is a string, `undefined` or an `inCategory()` ref, and params when it is any other object,
+     * `null` included, in which case the third is ignored. `unknown` when the build cannot tell
+     * (a variable, a member, a call), unless a third argument stands, which only a category before
+     * it makes sense of.
+     */
+    const secondArgument = (second: t.Node | undefined, third: t.Node | undefined): 'category' | 'params' | 'unknown' => {
+        if (!second) return 'category';
+        if (second.type === 'ObjectExpression' || second.type === 'NullLiteral') return 'params';
+        if (second.type === 'StringLiteral' || second.type === 'TemplateLiteral') return 'category';
+        if (second.type === 'Identifier' && second.name === 'undefined') return 'category';
+        if (second.type === 'CallExpression' && second.callee.type === 'Identifier' && second.callee.name === 'inCategory') return 'category';
+        return third ? 'category' : 'unknown';
+    };
+
+    /**
+     * `...((p, a) => …)(params, second)`: hands the core `[a, p]` when `a` is a category and
+     * `[{ ...a, ...p }]` when the core would read `a` as params, by the core's own rule, the ref's
+     * registry brand included (`Symbol.for('langsys.category')`, public for this). The values are
+     * evaluated before the argument, as they were written.
+     */
+    const decidedAtRuntime = (params: t.Expression, second: t.Expression): t.SpreadElement => {
+        const a = T.identifier('a');
+        const p = T.identifier('p');
+        const isRef = T.logicalExpression(
+            '&&',
+            T.binaryExpression('!==', a, T.nullLiteral()),
+            T.binaryExpression(
+                '===',
+                T.memberExpression(a, T.callExpression(T.memberExpression(T.identifier('Symbol'), T.identifier('for')), [T.stringLiteral('langsys.category')]), true),
+                T.booleanLiteral(true),
+            ),
+        );
+        const isParams = T.logicalExpression('&&', T.binaryExpression('===', T.unaryExpression('typeof', a), T.stringLiteral('object')), T.unaryExpression('!', isRef));
+        const pick = T.arrowFunctionExpression(
+            [p, a],
+            T.conditionalExpression(isParams, T.arrayExpression([T.objectExpression([T.spreadElement(a), T.spreadElement(p)])]), T.arrayExpression([a, p])),
+        );
+        return T.spreadElement(T.callExpression(pick, [params, second]));
+    };
+
     function rewriteCall(path: NodePath<t.CallExpression>, state: State) {
-        const [phrase, category, params] = path.node.arguments;
+        const [phrase, second, third] = path.node.arguments;
         if (!phrase || phrase.type === 'SpreadElement' || phrase.type === 'ArgumentPlaceholder') return;
         const parts = pieces(phrase);
         // A key is looked up as it is built (legacy-key mode), not a sentence with a value in it.
         if (!parts || isKeyShaped(parts)) return;
-        if (params && params.type === 'SpreadElement') return;
+        if (second?.type === 'SpreadElement' || second?.type === 'ArgumentPlaceholder') return;
+        if (third?.type === 'SpreadElement' || third?.type === 'ArgumentPlaceholder') return;
 
         const values = parts
             .filter((p): p is t.Expression => typeof p !== 'string')
             .map((e) => ({ source: sourceOf(state, e), expression: e }));
-        const paramsExpr = (params as t.Expression | undefined) ?? null;
+        const kind = secondArgument(second, third);
+        // Where the core reads the params from; for `unknown`, the argument that may hold them.
+        const paramsExpr =
+            kind === 'category'
+                ? ((third as t.Expression | undefined) ?? null)
+                : second!.type === 'NullLiteral'
+                  ? null
+                  : (second as t.Expression);
         // A `{name}` the text writes is the developer's when the call passes params that can fill it.
         // A params literal names each key it passes (taken below), so only params the build cannot
         // read into (a variable, a spread, a computed key) may hold any name; otherwise a written
@@ -731,10 +781,15 @@ export default function langsysPlaceholders({ types: T }: Babel): PluginObj<Stat
         const unique = placeholders(named);
         unique.forEach((n) => warn(state, n));
 
+        const rest = path.node.arguments.slice(kind === 'category' ? 3 : 2);
         path.node.arguments = [
             T.stringLiteral(text),
-            (category as t.Expression | undefined) ?? T.identifier('undefined'),
-            mergeParams(paramsExpr, unique),
+            ...(kind === 'category'
+                ? [(second as t.Expression | undefined) ?? T.identifier('undefined'), mergeParams(paramsExpr, unique)]
+                : kind === 'params'
+                  ? [mergeParams(paramsExpr, unique)]
+                  : [decidedAtRuntime(mergeParams(null, unique), second as t.Expression)]),
+            ...rest,
         ];
         state.meta.rewritten++;
     }

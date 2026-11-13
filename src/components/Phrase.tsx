@@ -160,8 +160,9 @@ export function Phrase({
             instance.destroy();
             instanceRef.current = undefined;
         };
+        // A new `tag` replaces the host element, so the instance moves to the new one.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapped.ok, category, previousCategory]);
+    }, [mapped.ok, category, previousCategory, tag]);
 
     useEffect(() => {
         instanceRef.current?.setParams(params);
@@ -173,7 +174,7 @@ export function Phrase({
         return createElement(
             tag,
             { ref: hostRef, className, ...hostAttrs },
-            ...toReactNodes(host.children, [createElement(tag), ...mapped.elements]),
+            ...toReactNodes(host.children, [createElement(tag), ...mapped.elements], [[], ...mapped.nested]),
             ...mapped.portals,
         );
     }
