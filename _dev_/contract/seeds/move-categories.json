@@ -1,0 +1,70 @@
+{
+    "projects": [
+        {
+            "id": "78000d00-0001-4000-8000-000000000000",
+            "title": "react move-categories moved#1 p1",
+            "base_locale": "en",
+            "target_locales": [
+                "es-es"
+            ],
+            "website_url": "https://site.local",
+            "machine_translate_new_phrases": false,
+            "phrases": [
+                {
+                    "category": "Header",
+                    "phrase": "Buy now",
+                    "translations": {
+                        "es-es": "Comprá ya"
+                    }
+                },
+                {
+                    "category": "Header",
+                    "phrase": "Sign in",
+                    "translations": {
+                        "es-es": "Ingresá"
+                    }
+                },
+                {
+                    "category": "Header",
+                    "phrase": "Not moved",
+                    "translations": {
+                        "es-es": "No movida"
+                    }
+                }
+            ],
+            "blocks": [
+                {
+                    "category": "Header",
+                    "custom_id": "ff3e44def085ca5b7e961dbf7bb3a119",
+                    "content": "<p>Moved block</p><p>Second paragraph</p>",
+                    "phrases": [
+                        {
+                            "phrase": "Moved block",
+                            "translations": {
+                                "es-es": "Bloque movido"
+                            }
+                        },
+                        {
+                            "phrase": "Second paragraph",
+                            "translations": {
+                                "es-es": "Segundo párrafo"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "user": {
+                "token": "136001|6fe1361b5a09ce51fa1881314c7f5cbcf1af3082",
+                "device_id": "react-move-categories-1"
+            }
+        }
+    ],
+    "keys": [
+        {
+            "id": "78000d01-0001-4000-8000-000000000000",
+            "key": "react-move-categories-1-k-writer",
+            "project": "78000d00-0001-4000-8000-000000000000",
+            "type": "write"
+        }
+    ]
+}

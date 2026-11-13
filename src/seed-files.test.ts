@@ -11,6 +11,7 @@ import nested from './test-helpers/contract-seeds/nested-fallback.js';
 import handoff from './test-helpers/contract-seeds/seed-handoff.js';
 import srv2 from './test-helpers/contract-seeds/srv2-credentials.js';
 import srv7 from './test-helpers/contract-seeds/srv7-served-block.js';
+import move from './test-helpers/contract-seeds/move-categories.js';
 import transform from './test-helpers/contract-seeds/transform.js';
 import var7 from './test-helpers/contract-seeds/var7-unregistered.js';
 import { renderSeedFile, seedFile, type SeedFile } from './test-helpers/contract-worlds.js';
@@ -34,6 +35,7 @@ const FILES: Record<string, SeedFile<string>> = {
     'seed-handoff': handoff,
     'srv2-credentials': srv2,
     'srv7-served-block': srv7,
+    'move-categories': move,
     transform,
     'var7-unregistered': var7,
 };
