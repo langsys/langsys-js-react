@@ -187,7 +187,7 @@ def selftest(spec, conf, carries, core):
         'header names another blob': conf.replace(blob, 'deadbeef' * 5, 1),
         'header names no spec version': re.sub(r'\| specVersion \|[^\n]*', '| specVersion | **0.0.0** — 1 rules |', conf, count=1),
         'implemented with mock tier': conf.replace('| BIND-1 | implemented | n/a (pure) |', '| BIND-1 | implemented | mock |', 1),
-        'provisional with a real tier': re.sub(r'(\| [A-Z]+-\d+ \| provisional \| )mock', r'\1contract', conf, count=1),
+        'provisional with a real tier': conf.replace('| BIND-1 | implemented | n/a (pure) |', '| BIND-1 | provisional | contract |', 1),
         'delegated without probe': re.sub(r'(\| CAT-1 \| delegated \| - \| )[^\n]*', r'\1Core row CAT-1 only.', conf, count=1),
         'n/a profile on a browser rule': conf.replace('| HINT-3 | delegated | - |', '| HINT-3 | n/a (profile: server) | - |', 1),
         'missing rule': re.sub(r'\n\| CONF-3 \|[^\n]*', '', conf, count=1),
@@ -205,6 +205,12 @@ def selftest(spec, conf, carries, core):
         mutants['citation of a row the core lacks'] = conf.replace('Core row CAT-1:', 'Core row CAT-99:', 1)
     ok = True
     for name, mutant in mutants.items():
+        # A fault whose target text is absent leaves the file as it was, and would read as missed
+        # for the wrong reason: say so, and fail.
+        if mutant == conf:
+            ok = False
+            print(f'  selftest NOT PLANTED  {name} (its target text is not in this file)')
+            continue
         if mutant is None: errs = check(spec, conf, {}, core)[0]
         else: errs = check(spec, mutant, carries, core)[0]
         caught = bool(errs)

@@ -21,11 +21,12 @@ src/
     hooks.ts                  # useT / useCurrentLocale / useTranslations / useLocaleStore / useWriteEnabled / useNotifyNavigation / useRenderServerMessage
     block-nodes.ts            # React children <-> the core's BlockNode tree (toBlockNodes / toReactNodes)
     components/               # Translate / Phrase over the core's renderBlock/registerBlock; DOM-class fallback; DontTranslate
-    test-helpers/             # contract-fixture launcher; SSR RequestAdapter harness (ssr-scope.ts)
-    *.test.ts(x)              # Vitest; *.contract.test.tsx run against contract-fixture/
-contract-fixture/             # vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
+    test-helpers/             # contract-fixture launcher and the seeded worlds (contract-seeds/, one module per seed file); in-process transport stand-in (stub-api.ts); SSR RequestAdapter harness (ssr-scope.ts)
+    *.test.ts(x)              # Vitest unit project; *.contract.test.tsx is the contract project, run against an SDK test clone through contract-fixture/'s forwarder
+contract-fixture/             # the forwarder to a real Langsys API, vendored byte-exact from langsys-js-typescript (tree cited in CONFORMANCE.md) — never edit
 vectors/                      # shared vector files (server messages, var naming), vendored byte-exact from langsys-js-typescript — never edit
-example/                      # Vite playground (npm run dev; /?checks=1 is the feature-checks page) and the contract-double launcher (npm run fixture) — not published
+_dev_/                        # release script; conformance checks (check-conformance.py, family-probes.py, conformance-probe.py); contract/seeds/ is what an SDK test clone is seeded from
+example/                      # Vite playground (npm run dev; /?checks=1 is the feature-checks page) and the forwarder launcher (npm run fixture) — not published
 example-next/                 # Next.js App Router app installing the packed package and core — not published
 ```
 
@@ -101,8 +102,14 @@ langsys-js-react/vite        // default export: langsys() Vite plugin, enforce '
 langsys-js-react/babel       // default export: the Babel plugin
 langsys-js-react/next        // withLangsys(nextConfig): the transform in Turbopack (rules, not foreign, content-filtered) and webpack (enforce 'pre'); SWC stays on
 
-// Component
-<Translate category? custom_id? label? tag? className? children />
+// Category moves (MOVE-1) — by reference, from both entries
+inCategory(category, { previousCategory })  // t()'s category argument for content moved from previousCategory ('' for none)
+isCategoryRef(value); types CategoryRef, CategoryMoveOptions
+
+// Components
+<Translate category? previousCategory? custom_id? label? params? tag? className? children />
+<Phrase category? previousCategory? params? tag? className? children />   // one phrase, markup allowed
+<DontTranslate tag? className? children />                               // translate="no" host
 <LangsysProvider seed>       // Next App Router: rebuilds the request scope from scope.seed() on the client-component side (core scopeFromSeed); hooks and Translate/Phrase read it for the server + hydration renders; seeds the browser in useInsertionEffect
 
 // Direct API client access (vanilla — no React concerns)
@@ -119,11 +126,12 @@ TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 
 ## Essential commands
 
-- `npm run fixture` — starts the contract double on :8787, seeded from `example/fixture-seed.json`. `TESTING.md` is the local testing guide (playground feature checks and `example-next/`).
+- `npm run fixture` — starts the contract fixture's forwarder on :8787 in front of a real Langsys API (an SDK test clone seeded from `_dev_/contract/seeds/playground.json`, or a Langsys holding that project); needs `LANGSYS_CONTRACT_TARGET` and `LANGSYS_CONTRACT_CLONE_ROOT`. `TESTING.md` is the local testing guide (playground feature checks, `example-next/`, both suites).
 - `npm run dev` — Vite dev server with the demo in `example/`. Needs `.env` at the repo root with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).
 - `npm run typecheck` — `tsc --noEmit`. Should be clean before any commit. (This is the React analog of the Svelte package's `npm run check`; CI runs it.)
 - `npm run build` — `tsup` → builds ESM + CJS + `.d.ts` to `dist/`.
-- `npm run test` — Vitest (`vitest run`). Tests are minimal; expand here for new features.
+- `npm test` — the unit project (`vitest run --project unit`): no clone, no listening socket. CI runs it.
+- `npm run test:contract` — the contract project, against an SDK test clone through the forwarder; reseed the clone first (`TESTING.md`, "The automated suite").
 - `npm run lint` / `npm run format` — Prettier + ESLint (flat config in `eslint.config.mjs`). Not run in CI.
 
 ## Local development setup
@@ -180,4 +188,9 @@ of it. This applies to every commit in this repo without exception.
 
 ## Testing approach
 
-Vitest in a `node` environment. The current test covers the locale-store adapter contract; the reactive read path is exercised by the `example/` playground. New features benefit from tests, especially around `useSignal`/`useLocaleStore` and the `<Translate>` mount lifecycle (add `jsdom` + `@testing-library/react` when you start testing components).
+Vitest, two projects in `vitest.config.ts`. Both run the build transform on every test module, as an app does, and resolve `langsys-js-react` to `src/index.ts`.
+
+- **unit** (`npm test`): every `*.test.ts(x)` but the contract files. Component tests opt into jsdom per file (`// @vitest-environment jsdom`) and drive React directly with `createRoot` / `hydrateRoot` inside `act`; server renders go through `react-dom/server` and the `RequestAdapter` harness in `test-helpers/ssr-scope.ts`. What the binding sends is read at an in-process stand-in for the transport (`test-helpers/stub-api.ts`), so nothing there is evidence of what a Langsys API does. `seed-files.test.ts` checks each file in `_dev_/contract/seeds` against its world in `test-helpers/contract-seeds/` and the clone's refusal table.
+- **contract** (`npm run test:contract`): the `*.contract.test.tsx` files, the `contract`-tier evidence in `CONFORMANCE.md` (spec CONF-2). They run one file at a time against an SDK test clone through the vendored forwarder, and throw without one, since a contract test never passes by skipping. Each case takes a seeded world of its own (project, keys, tokens) and reads it back before it acts; what a run writes stays, so a world serves one run and the clone is reseeded before the next (a case fails as `seed not landed` otherwise).
+
+A row `CONFORMANCE.md` grades names its test, and that test must go red when the code it covers is broken. Confirm a new test by mutating the code in a scratch worktree, not by watching it pass.

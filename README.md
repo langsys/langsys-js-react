@@ -295,7 +295,7 @@ Without the transform, write the placeholder yourself as **`%key%`** and pass th
 
 Without the transform, a bare `{count}` is evaluated by React before the SDK sees the text. Where it sits inside other text — `You have {count} items` — the component can tell a value was there but not what to call it, so it registers nothing for that block, renders any translation the catalog already holds, and says so once as a debug notice. In a `<Phrase>`, a value inside a part that is not translated, or inside notation such as `<math>`, doesn't count: the phrase's key leaves that part out, so the phrase still registers. Where the value is the only text of its element (`<b>{name}</b>`), it cannot be told from literal text, and the block registers the text it renders. The transform leaves a conditional (`{signedIn ? name : 'guest'}`) as written, so one inside other text registers nothing either. Raw HTML is content, not a variable: a block whose only dynamic part is `dangerouslySetInnerHTML` (a CMS field, say) registers that HTML's text; one that also interpolates a value registers nothing.
 
-`<Translate>` props: `category?`, `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
+`<Translate>` props: `category?`, `previousCategory?` (see [Moving content to another category](#moving-content-to-another-category)), `custom_id?`, `label?`, `params?`, `tag?` (defaults to `translate`), `className?`, `children`.
 
 ### `<Phrase>` — markup-bearing phrases (pluralization)
 
@@ -313,7 +313,7 @@ The inline elements never reach the translator — they're replaced with neutral
 
 > Note: write placeholders as `%n%` in `<Phrase>` markup (see the `<Translate>` note above) — a bare `{n}` in JSX is an expression and never reaches the SDK.
 
-`<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `className?`, `children`.
+`<Phrase>` props: `category?`, `previousCategory?`, `params?`, `tag?` (defaults to `span`), `className?`, `children`.
 
 ### `<DontTranslate>` — never-translated regions
 
