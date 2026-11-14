@@ -31,6 +31,7 @@
 
 ### Docs
 
+- **Plurals and gender: write the sentence flat.** The README showed `t('{count, plural, one {# item} other {# items}}', …)` as where `t()` calls were headed. It now says never to write ICU: write the sentence with the count or the name as a `{placeholder}`, Langsys makes each language's plural and gender forms, the base language included, and `t()` renders them with the CLDR plural rules of the loaded catalog's locale. Pass `name_gender` beside `name` to choose a gender form. Numbers and dates format for the locale inside those forms as everywhere else.
 - **`translationsLoadingPromise` settles when the fetch ends, on failure as well as on success, and never rejects.** On success `t()` already returns the new locale's text when it settles, and `useCurrentLocale()` follows about 100 ms later. On failure the page renders the source text, or the catalog stored for that locale, and `useCurrentLocale()` keeps naming the last locale that loaded. The README says to treat a settled promise with a matching locale as the only sign a switch worked, and that an error state needs the app's own timeout.
 
 ## 0.6.7 - 2026-08-21
